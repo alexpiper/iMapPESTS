@@ -168,7 +168,7 @@ write_tsv(bind_rows(trimmed), "logs/trimmed.tsv")
   
 ## Plot read quality & lengths
   remove requirement for  diff poaths for demulti
-```{r QA plot, eval = TRUE, cache= TRUE}
+```{r QA plot, eval = FALSE, cache= TRUE}
 runs <- dir("data/", pattern="run")
 #Load sample sheet
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
