@@ -1,7 +1,7 @@
 ---
-title: "Drosophila Metabarcoding"
+title: "iMapPESTS local metabarcoding workflow"
 author: "A.M. Piper"
-date: "2019/04/05"
+date: "2020/02/10"
 output:
   html_document:
     highlighter: null
@@ -50,17 +50,23 @@ sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 #devtools::install_github("thomasp85/patchwork")
 
 library(taxreturn)
+
+#Install bbmap
+taxreturn::bbmap_install()
+
+#Install fastqc
+taxreturn::fastqc_install()
 ```
 
 #Quality checks:
 
-```{r}
+We will conduct 2 quality checks. Firstly a check of the entire sequence run level quality check to identify any anomalies, followed by a sample level quality check to identify potential issues with specific samples. We will also do a quick similarity comparison using the minhash algorithm to detect any sample mixups at this early stage, as it is easier to fix them here then later.
+
+```{r quality checks}
 #Sequencing run quality using BasecallQC package
-#
 
 ## Sample quality using fastqc
 library(ngsReports)
-taxreturn::fastqc_install()
 test <- taxreturn::fastqc(fq.dir=trimmedpath, threads=2)
 
 # ngsreports of fastqc
@@ -70,36 +76,27 @@ writeHtmlReport(fileDir, overwrite = TRUE, quiet=FALSE)
 
 https://www.bioconductor.org/packages/release/bioc/vignettes/savR/inst/doc/savR.pdf
 
-
 BasecallQC package https://bioconductor.org/packages/devel/bioc/vignettes/basecallQC/inst/doc/basecallQC.html
 
-also fastqc: fastqcr
+# Demultiplex by primer & Trim
 
+If a heirarchial multiplexing strategy was used where multiple sets of samples or loci were labelled with the same illumina indexes, for example when targetting both COI and a pathogen loci, we can use the primer sequences that were used to amplify each loci to further demultiplex the data. For this to occur, make sure that twintagged is set to TRUE in the samplesheet
 
-# Demultiplex by primer & trim
+DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
 
-DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Prior to begining this workflow, samples were demultiplexed and illumina adapters were removed by the MiSeq software, however primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
-
-In this study there were 2 amplicons of different size, and 3 different replicate primers of each. For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files.
+For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files.
 
 ## fwhF2-fwhR2n amplicon:
 
 FORWARD PRIMERS:
     Name                    Illumina overhang adapter           Primer sequences
-    fwhF2T1_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GAGGDACWGGWTGAACWGTWTAYCCHCC
-    fwhF2T2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	 TGTGGDACWGGWTGAACWGTWTAYCCHCC
-    fwhF2T3_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	AGAAGGDACWGGWTGAACWGTWTAYCCHCC
+    fwhF2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GGDACWGGWTGAACWGTWTAYCCHCC
     
-REVERSE PRIMERS:
+REVERSE PRIMER:
     Name                    Illumina overhang adapter           Primer sequences
-    fwhR2nT1_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	ACGTRATWGCHCCDGCTARWACWGG
-    fwhR2nT2_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	TCCGTRATWGCHCCDGCTARWACWGG
-    fwhR2nT3_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	CTGCGTRATWGCHCCDGCTARWACWGG
+    fwhR2nT1_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	CGTRATWGCHCCDGCTARWACWGG
     
 ```{r primer trimming , message=FALSE}
-#Install bbmap
-bbmap_install()
-
 #Load sample sheet
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
 
@@ -170,8 +167,7 @@ write_tsv(bind_rows(trimmed), "logs/trimmed.tsv")
   
   
 ## Plot read quality & lengths
-  
-  
+  remove requirement for  diff poaths for demulti
 ```{r QA plot, eval = TRUE, cache= TRUE}
 runs <- dir("data/", pattern="run")
 #Load sample sheet
@@ -291,14 +287,11 @@ filtered_out %>%
 
 ## Infer sequence variants for each run
 
-The divisive partition algorithm is initialized by placing all unique sequences into a single partition and assigning the most abundant sequence as the center of that partition. All unique sequences are then compared to the center of their partition, error rates are calculated and stored, and the abundance p-value is calculated for each unique sequence. If the smallest p-value, after Bonferroni correction, falls below the user-settable threshold OMEGA_A, a new partition is formed with the unique sequence with the smallest p-value as its center, and all unique sequences are compared to the center of that new partition. After a new partition is formed, every unique sequence is
-allowed to join the partition most likely to have produced it (i.e., the partition that produces the highest expected number of that unique sequence). At that point, the division procedure iterates, with each iteration consisting of identifying the unique sequence with the smallest p-value, forming a new partition with that sequence as its center, and reshuffling sequences to their most likely partition. Division continues until all abundance p-values are greater than
-OMEGA_A; i.e., all unique sequences are consistent with being produced by amplicon sequencing the center of their partition. The inferred composition of the sample is then the set of central sequences and the corresponding total abundances of those parti- tions (alternatively, each read is denoised by replacing it with the central
+This workflow uses the DADA2 algorithm to differentiate real sequences from error using their abundance and co-occurance patters. This relies on the assumption that assuming a random error process where base errors are introduced randomly by either PCR polymerase or sequencing, real sequences will be high quality in the same way, while bad sequences are bad in different individual ways.
 
+DADA2 depends on a parameterized error model (the 16(possible bases) × 41(phred score) transition probabilities, for example, p(A→C, 35)), which is estimated from the data. DADA2’s default parameter estimation method is to perform a weighted loess fit to the regularized log of the observed mismatch rates as a function of their quality, separately for each transition type (for example, A→C mismatches are fit separately from A→G mismatches).
 
-DADA2 depends on a param- eterized error model (the 16 × 41 transition probabilities, for example, p(A→C, 35)), but if parameters are not known a priori then DADA2 can estimate them from the data. Given an inferred partition of the amplicon sequences, DADA2 records the mismatches between every sequence and the center of its partition and counts each type of mismatch (for example, the number of A→C mismatches where Q = 35). The resulting table of observed mismatches represents the errors inferred by DADA2 and can be used to estimate the parameters of the error model. 
-
-DADA2’s default parameter estimation method is to perform a weighted loess fit to the regularized log of the observed mismatch rates as a function of their quality, separately for each transition type (for example, A→C mismatches are fit separately from A→G mismatches).
+Every amplicon dataset has a different set of error rates and the DADA2 algorithm makes use of a parametric error model (err) to model this and infer real biological sequence variation from error. Following error model learning, all identical sequencing reads are dereplicated into into “Exact sequence variants” with a corresponding abundance equal to the number of reads with that unique sequence. The forward and reverse reads are then merged together by aligning the denoised forward reads with the reverse-complement of the corresponding reverse reads, and then constructing the merged “contig” sequences. Following this step, a sequence variant table is constructed and saved as an RDS file.
 
 The problem with novaseq data is the binned quality scores.
 
@@ -309,16 +302,9 @@ NovaSeq error rate conversions
 15-30 -> 23
 31-40 -> 37
 
-However, the error rate estimation function is a modular part of the algorithm, and users can provide their own R function to estimate the parameters of the error model from the observed mismatches if they prefer a different method.
-
-Every amplicon dataset has a different set of error rates and the DADA2 algorithm makes use of a parametric error model (err) to model this and infer real biological sequence variation from error. Following error model learning, all identical sequencing reads are dereplicated into into “Exact sequence variants” with a corresponding abundance equal to the number of reads with that unique sequence. The forward and reverse reads are then merged together by aligning the denoised forward reads with the reverse-complement of the corresponding reverse reads, and then constructing the merged “contig” sequences. Following this step, a sequence variant table is constructed and saved as an RDS file.
-
 For this analysis we will use all the reads to estimate error rate, and plot the error model for each run as a sanity check. In this plot you generally want to see if the fitted error rates (black line) reasonably fit the observations (black points) and generally decrease with increasing Q (towards right of plot)?
 
-The purpose of priors is to increase sensitivity to a restricted set of sequences, including singleton detection, without increasing false-positives from the unrestricted set of all possible amplicon sequences that must be considered by the naive algorithm
-
-NOTE: Try a comparison between using the conventional pooling, pseudo pooling, and using the reference database as a prior 
-
+For high depth sequencing such as with the Novaseq, i would suggest increasing the value of nbases to ensure the error rate is inferred from a suitable proportion of the data
 ```{r Learn error rates }
 runs <- dir("data/", pattern="run")
 set.seed(100)
@@ -447,7 +433,10 @@ saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you w
 
 We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5
 
-This requires training on a curated reference database - The pre-trained file can be found in the reference folder, alternatively see the taxreturn scripts to curate a reference database and train a new classifier.
+For alternative options such as RDP or blast assignment, see:
+I would strongly recommend not using BLAST due to potential for false positives 
+
+IDTAXA requires training on a curated reference database - The pre-trained file can be found in the reference folder, alternatively see the taxreturn scripts to curate a reference database and train a new classifier.
 
 Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences (including the synthetic positive controls) to species level
 
@@ -611,25 +600,6 @@ rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>%
 
 tax_plus <- readRDS("output/rds/tax_IdTaxaExact.rds") 
 
-#### Rename problematic samples
-rownames(seqtab.nochim)  <- rownames(seqtab.nochim) %>%
-  str_replace_all("D250M1-", "D250M4REP-") %>%
-  str_replace_all("D250M2-", "D250M5REP-") %>%
-  str_replace_all("D250M3-", "D250M1REP-") %>%
-  str_replace_all("D250M4-", "D250M2REP-") %>%
-  str_replace_all("D250M5-", "D250M3REP-") %>%
-  str_replace_all("D500M1-", "D500M4REP-") %>%
-  str_replace_all("D500M2-", "D500M5REP-") %>%
-  str_replace_all("D500M3-", "D500M1REP-") %>%
-  str_replace_all("D500M4-", "D500M2REP-") %>%
-  str_replace_all("D500M5-", "D500M3REP-") %>% # This should maybe be M2?
-  str_replace_all("D1000M1-", "D1000M3REP-") %>%
-  str_replace_all("D1000M2-", "D1000M4REP-") %>%
-  str_replace_all("D1000M3-", "D1000M5REP-") %>%
-  str_replace_all("D1000M4-", "D1000M1REP-") %>%
-  str_replace_all("D1000M5-", "D1000M2REP-") %>%
-  str_replace_all("REP", "")
-
 #Load sample information
 ## ---- samdat ----
 samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
@@ -732,203 +702,3 @@ sum_test <- tax_table(ps_test) %>%
 unique_sp <- unique(tax_table(ps_test)[,7]) %>% unname() %>% as.data.frame() %>% filter(!str_detect(V1, "__"))
 
 ```
-
-
-## Process replicates 
-
-In this section we will estimate within sample consistency using Kulczynski distance, which is a presence/absense distance measure.
-
-To ensure the reproducibility of detection, all PCR replicates that had a high Kulczynski distance to other replicates within the same sample were removed.
-
-Following this, we only retained ASV's that were present in at least 2 different replicates from each sample
-
-Adapted from Mike mclarens code: https://github.com/benjjneb/dada2/issues/745
-
-This could probably go before taxonomic assignment?
-
-```{r replicates}
-#ps <- readRDS("output/rds/ps_idtaxaExact.rds")
-
-#Handle replicataes
-rm_samples <- c("Undetermined")
-ps1 <- subset_samples(ps, sample_names(ps) !=rm_samples) # Drop Undetermined reads
-ps1 <- prune_samples(sample_sums(ps1)>=20, ps1) # Drop empty samples
-
-#Calculate for each primer
-#ps1 <- subset_samples(ps1,target_subfragment=="fwhF2-fwhR2n")
-#ps1 <- subset_samples(ps1,target_subfragment=="fwhF2-HexCOIR4")
-
-#Calculate kulczynski distance - A presence absense measure of detection 
-
-  kdi <- phyloseq::distance(ps1, method="kulczynski")
-  
-  kdimap <- as.data.frame(as.matrix(kdi)) %>%
-    rownames_to_column() %>%
-    gather(key="colname",value="Distance",-rowname)
-  
-  #Make heatmap plot
-  gg.kdimap <- ggplot(data = kdimap, aes(x=rowname, y=colname, fill=-Distance)) + 
-    geom_tile() + scale_fill_viridis() + 
-    ggtitle(paste0("kulczynski distance")) + 
-    theme(axis.text.x=element_text(angle=90,hjust=1),
-          axis.title = element_blank(),
-          legend.position = "none")
-
-# Merge replicates
-  ps.merged <- ps1 %>%
-    merge_samples(group = "ExtractID")
-
-## keeping only those ASVs that occur in 2 replicates
-## Create a matrix of 0s and 1s indicating whether the taxon count should be
-## allowed, or should be set to 0.
-#ps.merged.ok <- ps1 %>%
-#    transform_sample_counts(function (x) (x > 0) * 1) %>%  #Summarise presence/absense across reps
-#    merge_samples(group = "ExtractID") %>% #Merge reps
-#    transform_sample_counts(function (x) (x > 1) * 1) #Only keep those occuring in 2 or more replicates
-#
-###Test export
-###    write.csv(psmelt(ps.merged.ok),"test.csv")
-##    
-### Multiply the counts by the 0-1 matrix
-#newotu <- otu_table(ps.merged) * otu_table(ps.merged.ok)
-#
-#otu_table(ps.merged) <- otu_table(newotu, taxa_are_rows = FALSE)
-#
-
-#This loses the sample metadata - Need to add it agian
-samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-  #filter(FCID== "CK3HD2") %>% # change for other runs
-  filter(!duplicated(ExtractID))  %>%
-  magrittr::set_rownames(.$ExtractID) %>%
-  dplyr::select(c("sample_id", "ExtractID",
-                  "geo_loc_name", "material", 
-                  "target_subfragment", "F_primer", "R_primer",
-                  "FCID", "seq_platform_ID"))
-
-sample_data(ps.merged) <- samdf
-ps.merged <- filter_taxa(ps.merged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-
-# After merging kulczynski distance 
-
-  kdi2 <- phyloseq::distance(ps.merged, method="kulczynski")
-  
-  kdimap2 <- as.data.frame(as.matrix(kdi2)) %>%
-    rownames_to_column() %>%
-    gather(key="colname",value="Distance",-rowname)
-  
-  #Make heatmap plot
-  gg.kdimap2 <- ggplot(data = kdimap2, aes(x=rowname, y=colname, fill=-Distance)) + 
-    geom_tile() + scale_fill_viridis() + 
-    ggtitle(paste0("kulczynski distance post replicate merge")) + 
-    theme(axis.text.x=element_text(angle=90,hjust=1)) + 
-    theme(axis.text.x=element_text(angle=90,hjust=1),
-          axis.title = element_blank(),
-          legend.position = "none")
-  
-
-```
-
-## Check for concordance between mock
-
-
-```{r PCA}
-
-# Output drosophila summary
-ps.merged %>% 
-  subset_taxa(Family=="Drosophilidae") %>%
-  microbiome::transform("compositional") %>%
-  summarise_taxa("Species", "sample_id") %>%
-  filter(!str_detect(sample_id, "NTC")) %>%
-  #filter(str_detect(Species, "Drosophila|Scaptodrosophila")) %>%
-  spread(key="sample_id", value="totalRA") %>%
-  write.csv(file = "output/csv/unfiltered/drosophila_spp_sum.csv")
-
-# Read in expected table
-exp <- read_csv("sample_data/expected_quant.csv") %>%
-  gather(Species, Abundance, -X1) %>%
-  mutate(Species = str_replace(Species, pattern=" ",replacement="_")) %>%
-  filter(str_detect(X1,"D100M|D250M|D500M|D1000M|DLarv")) %>%
-  drop_na() %>%
-  set_colnames(c("Sample","Species","Actual"))
-
-# PCA on exp
-test <- exp %>%
-  pivot_wider(
-    names_from = Sample,
-    values_from = Actual,
-    values_fill = list(Actual=0),
-  ) %>%
-  column_to_rownames("Species") %>%
-  #group_by(Sample, Species) %>%
-  nest(data = everything()) %>%
-  mutate(pca = map(data, ~ prcomp(.x, 
-                                  center = TRUE, scale = TRUE)))
-
-library(broom)
-test$pca %>%
-  map(~tidy(.x, data = .y, "pcs")) %>%
-  as.data.frame() %>%
-  ggplot(aes(x = PC, y=percent)) +
-  geom_bar(stat="identity") + labs(x="PC",y="Variance Explained")
-
-test %>% 
-  mutate(pca_aug = map2(pca, data, ~augment(.x, data = .y))) %>%
-  unnest(pca_aug)
-
-test %>% 
-  mutate(pca_aug = map2(pca, data, ~augment(.x, data = .y))) %>%
-  unnest(pca_aug) %>%
-  ggplot(aes(x=.fittedPC1, y=.fittedPC2)) + geom_point(aes(color=.rownames),size=3, alpha=0.7) +
-  labs(x="PC1", y="PC2") +
-  theme(legend.position="top")
-
-# Mutate real one
-sam <- ps.merged %>%
-  speedyseq::tax_glom("Species") %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  mutate(Species = str_replace(Species, pattern="Drosophila_mauritiana/simulans", replacement= "Drosophila_simulans")) %>%
-  filter(Sample %in% exp$Sample) %>%
-  arrange(Abundance) %>%
-  distinct() 
-
-```
-
-
-## Process synthetic mock positive control
-
-
-
-Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
-
-#
-
-```{r prevalence-assessment}
-# Calculate taxon prevalence across the data set
-prevdf <- apply(X = otu_table(ps.merged), MARGIN = ifelse(taxa_are_rows(ps.merged), yes = 1, no = 2),FUN = function(x){sum(x > 0)})
-
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.merged), tax_table(ps.merged))
-
-#Prevalence plot
-gg.prev <- subset(prevdf, Order %in% get_taxa_unique(ps.merged, "Order")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=Genus)) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~Order) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
-
-gg.prev
-```
-
-## ASV Filtering
-
-* remove samples with low reads
-* Remove all OTUS with an abundance less than 0.01 (or index switch estimate)
-  -This could be better estimated with an ROC curve of false positives and false negatives in mock communities?
-* Remove OTUs that are found in less than 20% of samples- For Quantitative analysis not for detection
-
-# Determine filtering threshold
