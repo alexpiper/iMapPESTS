@@ -27,35 +27,36 @@ opts_chunk$set(dev = 'png')
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra","tidyverse","scales","stringdist","patchwork","vegan","ggpubr","seqinr","viridis")
+.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "patchwork")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd")
 #.github_packages <- c("metacal", "taxreturn", "piperline")
 
-#.inst <- .cran_packages %in% installed.packages()
-#if(any(!.inst)) {
-#   install.packages(.cran_packages[!.inst])
-#}
-#.inst <- .bioc_packages %in% installed.packages()
-#if(any(!.inst)) {
-#  if (!requireNamespace("BiocManager", quietly = TRUE))
-#    install.packages("BiocManager")
-#  BiocManager::install(.bioc_packages[!.inst], ask = F)
-#}
-#
+.inst <- .cran_packages %in% installed.packages()
+if(any(!.inst)) {
+   install.packages(.cran_packages[!.inst])
+}
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  BiocManager::install(.bioc_packages[!.inst], ask = F)
+}
+
 #Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
-#devtools::install_github("benjjneb/dada2")
-#devtools::install_github("alexpiper/taxreturn")
-#devtools::install_github("thomasp85/patchwork")
+devtools::install_github("alexpiper/taxreturn")
 
 library(taxreturn)
 
 #Install bbmap
-taxreturn::bbmap_install()
+taxreturn::bbmap_install(dest.dir = "bin")
 
 #Install fastqc
-taxreturn::fastqc_install()
+taxreturn::fastqc_install(dest.dir = "bin")
+
+#Install blast
+taxreturn::blast_install(dest.dir = "bin")
 ```
 
 #Quality checks:
@@ -67,7 +68,7 @@ We will conduct 2 quality checks. Firstly a check of the entire sequence run lev
 
 ## Sample quality using fastqc
 library(ngsReports)
-test <- taxreturn::fastqc(fq.dir=trimmedpath, threads=2)
+test <- taxreturn::fastqc(fq.dir = trimmedpath, threads=2)
 
 # ngsreports of fastqc
 fileDir <- file.path("data/run_4/FASTQC")
