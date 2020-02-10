@@ -27,9 +27,21 @@ opts_chunk$set(dev = 'png')
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "patchwork")
-.bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd")
-#.github_packages <- c("metacal", "taxreturn", "piperline")
+.cran_packages <- c("ggplot2",
+                    "gridExtra",
+                    "tidyverse", 
+                    "scales",
+                    "stringdist",
+                    "patchwork",
+                    "vegan",
+                    "ggpubr",
+                    "seqinr",
+                    "patchwork")
+.bioc_packages <- c("dada2",
+                    "phyloseq",
+                    "DECIPHER",
+                    "Biostrings",
+                    "ShortRead")
 
 .inst <- .cran_packages %in% installed.packages()
 if(any(!.inst)) {
@@ -59,12 +71,43 @@ taxreturn::fastqc_install(dest.dir = "bin")
 taxreturn::blast_install(dest.dir = "bin")
 ```
 
+## Create Sample Sheet
+
+We will now use the Illumina run sample sheet, and runparameters files to make a new samplesheet that we will use to track samples through the pipeline. We will add the primer sequences as well for our later demultiplexing steps:
+
+FORWARD PRIMERS:
+    Name                    Illumina overhang adapter           Primer sequences
+    fwhF2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GGDACWGGWTGAACWGTWTAYCCHCC
+    
+REVERSE PRIMER:
+    Name                    Illumina overhang adapter           Primer sequences
+    fwhR2nT1_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	CGTRATWGCHCCDGCTARWACWGG
+    
+
+If we use a heirarchial tagging strategy we can also add these here
+
+```{r Create Samplesheet}
+
+samdf <- taxreturn::create_samplesheet(SampleSheet = "sample_data/SampleSheet.csv",
+                          runParameters = "sample_data/runParameters.xml",
+                          format="miseq")
+
+samdf <- samdf %>%
+  mutate(Fprimer = "GGDACWGGWTGAACWGTWTAYCCHCC",
+         Rprimer = "CGTRATWGCHCCDGCTARWACWGG", 
+         twintagged = FALSE)
+
+
+write_csv(samdf, "sample_data/Sample_info.csv")
+```
+
+
 #Quality checks:
 
-We will conduct 2 quality checks. Firstly a check of the entire sequence run level quality check to identify any anomalies, followed by a sample level quality check to identify potential issues with specific samples. We will also do a quick similarity comparison using the minhash algorithm to detect any sample mixups at this early stage, as it is easier to fix them here then later.
+We will conduct 2 quality checks. Firstly a check of the entire sequence run level quality check to identify any anomalies, followed by a sample level quality check to identify potential issues with specific samples.
 
 ```{r quality checks}
-#Sequencing run quality using BasecallQC package
+#Sequencing run quality using BasecallQC package * NOT CURRENTLY IMPLEMENTED *
 
 ## Sample quality using fastqc
 library(ngsReports)
@@ -75,27 +118,17 @@ fileDir <- file.path("data/run_4/FASTQC")
 writeHtmlReport(fileDir, overwrite = TRUE, quiet=FALSE)
 ```
 
-https://www.bioconductor.org/packages/release/bioc/vignettes/savR/inst/doc/savR.pdf
-
-BasecallQC package https://bioconductor.org/packages/devel/bioc/vignettes/basecallQC/inst/doc/basecallQC.html
 
 # Demultiplex by primer & Trim
-
-If a heirarchial multiplexing strategy was used where multiple sets of samples or loci were labelled with the same illumina indexes, for example when targetting both COI and a pathogen loci, we can use the primer sequences that were used to amplify each loci to further demultiplex the data. For this to occur, make sure that twintagged is set to TRUE in the samplesheet
 
 DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
 
 For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files.
 
+If a heirarchial multiplexing strategy was used where multiple sets of samples or loci were labelled with the same illumina indexes, for example when targetting both COI and a pathogen loci, we can use the primer sequences that were used to amplify each loci to further demultiplex the data. For this to occur, make sure that twintagged is set to TRUE in the samplesheet
+
 ## fwhF2-fwhR2n amplicon:
 
-FORWARD PRIMERS:
-    Name                    Illumina overhang adapter           Primer sequences
-    fwhF2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GGDACWGGWTGAACWGTWTAYCCHCC
-    
-REVERSE PRIMER:
-    Name                    Illumina overhang adapter           Primer sequences
-    fwhR2nT1_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	CGTRATWGCHCCDGCTARWACWGG
     
 ```{r primer trimming , message=FALSE}
 #Load sample sheet
@@ -117,7 +150,7 @@ for (i in seq(along=runs)){
     filter(FCID== runs[i] %>% str_split_fixed(pattern="_", n=2) %>% as_tibble() %>% pull(V2))
   
   #Get primer sequences
-  primers <- c(unique(run_data$F_seq), unique(run_data$R_seq))
+  primers <- c(unique(run_data$Fprimer), unique(run_data$Rprimer))
   
   #Check if samples were twin tagged - these require extra round of demultiplexing
   twintagged <- any(!is.na(run_data$twintagF))
@@ -168,7 +201,7 @@ write_tsv(bind_rows(trimmed), "logs/trimmed.tsv")
   
   
 ## Plot read quality & lengths
-  remove requirement for  diff poaths for demulti
+
 ```{r QA plot, eval = FALSE, cache= TRUE}
 runs <- dir("data/", pattern="run")
 #Load sample sheet
@@ -218,9 +251,7 @@ The reverse reads are of significantly worse quality, especially at the end, whi
 
 ## Filter and trim
 
-The max expected error function is used as the primary quality filter, and all reads containing N bases were removed
-
-Should be using trunclength to make sure the amplicons are the same length despite heterogeneity filtering!
+The max expected error function is used as the primary quality filter, and all reads containing N bases were removed. Should be using trunclength to make sure the amplicons are the same length despite heterogeneity filtering!
 
 
 ```{r filter and trim}
