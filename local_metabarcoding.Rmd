@@ -3,6 +3,7 @@ title: "iMapPESTS local metabarcoding workflow"
 author: "A.M. Piper"
 date: "2020/02/10"
 output:
+  
   html_document:
     highlighter: null
     theme: "flatly"
@@ -13,7 +14,8 @@ output:
       smooth_scroll: true
     df_print: paged    
   pdf_document: default
-  
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -24,6 +26,8 @@ opts_chunk$set(dev = 'png')
 ```
 
 # Introduction 
+
+This pipeline requires various R packages to be installed prior to running. These are obtained from CRAN, Bioconductor and Github. The taxreturn R package also provides wrappers around other software packages required. For convenience we will download and install these software in a new folder called "bin"
 
 ```{r install & Load packages} 
 #Set required packages
@@ -71,166 +75,129 @@ taxreturn::fastqc_install(dest.dir = "bin")
 taxreturn::blast_install(dest.dir = "bin")
 ```
 
-## Create Sample Sheet
+## Set analysis parameters and create sample sheet
 
-We will now use the Illumina run sample sheet, and runparameters files to make a new samplesheet that we will use to track samples through the pipeline. We will add the primer sequences as well for our later demultiplexing steps:
+In order to track samples and relevant QC statistics throughout the metabarcoding pipeline, we will first create a samplesheet. 
 
-FORWARD PRIMERS:
-    Name                    Illumina overhang adapter           Primer sequences
-    fwhF2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GGDACWGGWTGAACWGTWTAYCCHCC
-    
-REVERSE PRIMER:
-    Name                    Illumina overhang adapter           Primer sequences
-    fwhR2nT1_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	CGTRATWGCHCCDGCTARWACWGG
-    
+This function requires both the SampleSheet.csv used for the sequencing run, and the runParameters.xml, both of which can be obtained from the demultiplexed sequencing run folder (in this case /group/sequencing/200203_M03633_0388_000000000-CJL7D)
 
-If we use a heirarchial tagging strategy we can also add these here
 
-```{r Create Samplesheet}
+```{r}
+# Plotting parameters
+readQC_aggregate <- TRUE
+readQC_subsample <-  12
 
 samdf <- taxreturn::create_samplesheet(SampleSheet = "sample_data/SampleSheet.csv",
                           runParameters = "sample_data/runParameters.xml",
                           format="miseq")
 
-samdf <- samdf %>%
+# Add primers to samdf
+samdf <- samdf %>% 
   mutate(Fprimer = "GGDACWGGWTGAACWGTWTAYCCHCC",
-         Rprimer = "CGTRATWGCHCCDGCTARWACWGG", 
-         twintagged = FALSE)
-
+         Rprimer = "GTRATWGCHCCDGCTARWACWGG")
 
 write_csv(samdf, "sample_data/Sample_info.csv")
 ```
-
 
 #Quality checks:
 
 We will conduct 2 quality checks. Firstly a check of the entire sequence run level quality check to identify any anomalies, followed by a sample level quality check to identify potential issues with specific samples.
 
 ```{r quality checks}
-#Sequencing run quality using BasecallQC package * NOT CURRENTLY IMPLEMENTED *
+#Load sample sheet
+samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
 
 ## Sample quality using fastqc
-library(ngsReports)
-test <- taxreturn::fastqc(fq.dir = trimmedpath, threads=2)
+runs <- unique(samdf$FCID)
+
+for (i in 1:length(runs)){
+  path <- paste0("data/", runs[i], "/")
+  taxreturn::fastqc(fq.dir = path, fastqc.path = "bin/FastQC/fastqc", threads=2)
+  fileList <- list.files(paste0(path, "FASTQC"), pattern = "fastqc.zip", full.names= TRUE)
+  writeHtmlReport(paste0(path, "FASTQC"), overwrite = TRUE, quiet=FALSE)
+}
 
 # ngsreports of fastqc
-fileDir <- file.path("data/run_4/FASTQC")
-writeHtmlReport(fileDir, overwrite = TRUE, quiet=FALSE)
+library(ngsReports)
 ```
 
 
-# Demultiplex by primer & Trim
+# Trim Primers
 
-DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
+DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm. For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files. the taxreturn R package contains a wrapper to call bbduk from R to trim primers.
 
-For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files.
-
-If a heirarchial multiplexing strategy was used where multiple sets of samples or loci were labelled with the same illumina indexes, for example when targetting both COI and a pathogen loci, we can use the primer sequences that were used to amplify each loci to further demultiplex the data. For this to occur, make sure that twintagged is set to TRUE in the samplesheet
-
-## fwhF2-fwhR2n amplicon:
-
+    FORWARD PRIMERS:
+        Name                    Illumina overhang adapter           Primer sequences
+        fwhF2_P5	ACACTCTTTCCCTACACGACGCTCTTCCGATCT	  GGDACWGGWTGAACWGTWTAYCCHCC
+    
+    REVERSE PRIMER:
+        Name                    Illumina overhang adapter           Primer sequences
+        fwhR2n_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	GTRATWGCHCCDGCTARWACWGG
+        
+# Need to add an amplicon length box - check if read lenght is longer than amplicon - 2 primers. If so, trim right is necessary
     
 ```{r primer trimming , message=FALSE}
 #Load sample sheet
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
+runs <- unique(samdf$FCID)
 
-#Demultiplex samples
-runs <- dir("data/", pattern="run")
+#Create lists to track reads
+trimmed <- vector("list", length = length(runs))
 
-i=1
-
-#Create vectors to track reads
-trimmed <- vector("list", length=length(runs))
-demux <- vector("list", length=length(runs))
-
-for (i in seq(along=runs)){
-  path <- paste0("data/", runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+for (i in 1:length(runs)){
+  path <- paste0("data/", runs[i])
   
   run_data <- samdf %>%
-    filter(FCID== runs[i] %>% str_split_fixed(pattern="_", n=2) %>% as_tibble() %>% pull(V2))
+    filter(FCID == runs[i])
   
   #Get primer sequences
   primers <- c(unique(run_data$Fprimer), unique(run_data$Rprimer))
+
+  fastqFs <- sort(list.files(paste0(path), pattern="_R1_", full.names = TRUE))
+  fastqRs <- sort(list.files(paste0(path), pattern="_R2_", full.names = TRUE))
   
-  #Check if samples were twin tagged - these require extra round of demultiplexing
-  twintagged <- any(!is.na(run_data$twintagF))
-  if (twintagged == TRUE) {
-      demuxpath <- file.path(path, "demux") # Filtered forward files go into the path/filtered/ subdirectory
-      dir.create(demuxpath)
-      
-      fastqFs <- sort(list.files(path, pattern="R1_001.*", full.names = TRUE))
-      fastqRs <- sort(list.files(path, pattern="R2_001.*", full.names = TRUE))
-      
-      demux[[i]] <- bbdemux(install="bin/bbmap", fwd=fastqFs, rev=fastqRs, Fbarcodes = unique(run_data$twintagF),
-                    Rbarcodes = unique(run_data$twintagR), degenerate=TRUE, out.dir=demuxpath, threads=1 ,
-                    mem=4,  hdist=0, overwrite=TRUE, tidylog = TRUE)
-      
-      demux_fastqs <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE))
-    
-      trimmed[[i]] <- bbtrim(install="bin/bbmap", fwd=demux_fastqs, 
-                    primers = primers, 
-                    degenerate = TRUE, out.dir="trimmed", trim.end = "left",
-                    ordered=TRUE, mink=FALSE, hdist=2, 
-                    maxlength= (max(run_data$readlength) - sort(nchar(primers), decreasing=FALSE)[1]) +5,
-                    overwrite=TRUE, quality=FALSE, tidylog=TRUE)
-      
-      #Re-split interleaved fastq's
-      trimmedpath <- file.path(demuxpath, "trimmed") # Filtered forward files go into the path/filtered/ subdirectory
-      trimmed_fastqs <- sort(list.files(trimmedpath, pattern="_R1R2_", full.names = TRUE))
-      bbsplit(install="bin/bbmap", files=trimmed_fastqs, overwrite=TRUE)
+  trimmed[[i]] <- bbtrim(install="bin/bbmap", fwd = fastqFs, rev = fastqRs,
+                primers = primers, 
+                degenerate = TRUE, out.dir="trimmed", trim.end = "left",
+                ordered = TRUE, mink = FALSE, hdist = 2,
+                maxlength =(max(run_data$Fread, run_data$Rread) - sort(nchar(primers), decreasing = FALSE)[1]) +5,
+                overwrite = TRUE, quality = FALSE)
+
+  reads_remaining <- signif(sum(trimmed[[i]]$output_reads) / sum(trimmed[[i]]$input_reads)*100, 2)
+  bases_remaining <- signif(sum(trimmed[[i]]$output_bases) / sum(trimmed[[i]]$input_bases)*100, 2)
   
-      
-  } else if (twintagged == FALSE) {
-    
-    fastqFs <- sort(list.files(paste0(path), pattern="_R1_", full.names = TRUE))
-    fastqRs <- sort(list.files(paste0(path), pattern="_R2_", full.names = TRUE))
-    
-    trimmed[[i]] <- bbtrim(install="bin/bbmap", fwd=fastqFs, rev=fastqRs,
-                    primers=primers, 
-                    degenerate = TRUE, out.dir="trimmed", trim.end = "left",
-                    ordered=TRUE, mink=FALSE, hdist=2,
-                    maxlength=(max(run_data$readlength) - sort(nchar(primers), decreasing=FALSE)[1]) +5,
-                    overwrite=TRUE, quality=FALSE, tidylog=TRUE)
-    }
+  message(paste0(reads_remaining,"% of reads and ", bases_remaining, "% of bases remaining for ", runs[i]," after trimming"))
 }
-  
-write_tsv(bind_rows(demux), "logs/demux.tsv")
-write_tsv(bind_rows(trimmed), "logs/trimmed.tsv")
-  
+
+dir.create("logs")
+read_trim_log <- bind_rows(trimmed)
+write_tsv(read_trim_log, "logs/trimmed.tsv")
 ```
   
   
 ## Plot read quality & lengths
 
 ```{r QA plot, eval = FALSE, cache= TRUE}
-runs <- dir("data/", pattern="run")
 #Load sample sheet
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
+runs <- unique(samdf$FCID)
 
-
-for (i in seq(along=runs)){
+for (i in 1:length(runs)){
   run_data <- samdf %>%
-    filter(FCID== runs[i] %>% str_split_fixed(pattern="_", n=2) %>% as_tibble() %>% pull(V2))
-  
-  #Check if run used twin tags
-  twintagged <- any(!is.na(run_data$twintagF))
-  
-  if (twintagged == TRUE) {
-    path <- paste0("data/", runs[i], "/demux/trimmed" )# CHANGE ME to the directory containing primer trimmed fastq files
-  } else if (twintagged == FALSE) {
-    path <- paste0("data/", runs[i], "/trimmed" )# CHANGE ME to the directory containing primer trimmed fastq files
-  }
+    filter(FCID == runs[i])
+
+  path <- paste0("data/", runs[i], "/trimmed" )
  
   ##Get trimmed files, accounting for empty files (28 indicates empty sample)
   trimmedFs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
-  trimmedFs <- trimmedFs[file.size(trimmedFs)>28]
+  trimmedFs <- trimmedFs[file.size(trimmedFs) > 28]
 
   #Plot an aggregate quality of random samples
-  sampleF <- sample(trimmedFs, 12)
+  sampleF <- sample(trimmedFs, readQC_subsample) #NOTE - need to have option to pass
   sampleR <- sampleF %>% str_replace(pattern="_R1_", replacement = "_R2_")
   
-  p1 <- plotQualityProfile(sampleF, aggregate = FALSE) + ggtitle(paste0(runs[i], " Forward Reads")) 
-  p2 <- plotQualityProfile(sampleR, aggregate = FALSE) + ggtitle(paste0(runs[i], " Reverse Reads"))
+  p1 <- plotQualityProfile(sampleF, aggregate = readQC_aggregate) + ggtitle(paste0(runs[i], " Forward Reads")) 
+  p2 <- plotQualityProfile(sampleR, aggregate = readQC_aggregate) + ggtitle(paste0(runs[i], " Reverse Reads"))
   
   #output plots
   dir.create("output")
@@ -249,33 +216,27 @@ The forward reads are good quality. We generally advise trimming the last few nu
 
 The reverse reads are of significantly worse quality, especially at the end, which is common in Illumina sequencing. This isn’t too worrisome, as DADA2 incorporates quality information into its error model which makes the algorithm robust to lower quality sequence, but trimming as the average qualities crash will improve the algorithm’s sensitivity to rare sequence variants. Based on these profiles, we will truncate the reverse reads at position 160 where the quality distribution crashes.
 
-## Filter and trim
+# Filter reads
 
 The max expected error function is used as the primary quality filter, and all reads containing N bases were removed. Should be using trunclength to make sure the amplicons are the same length despite heterogeneity filtering!
 
 
 ```{r filter and trim}
-runs <- dir("data/", pattern="run")
-filtered_out <- vector("list", length=length(runs))
-
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
+runs <- unique(samdf$FCID)
+filtered_out <- vector("list", length=length(runs))
 
 for (i in 1:length(runs)){
   
    run_data <- samdf %>%
-    filter(FCID== runs[i] %>% str_split_fixed(pattern="_", n=2) %>% as_tibble() %>% pull(V2))
+    filter(FCID == runs[i])
   
-  #Check if run used twin tags
-  twintagged <- any(!is.na(run_data$twintagF))
+  path <- paste0("data/", runs[i], "/trimmed" )
   
-  if (twintagged == TRUE) {
-    path <- paste0("data/", runs[i], "/demux/trimmed" )
-  } else if (twintagged == FALSE) {
-    path <- paste0("data/", runs[i], "/trimmed" )
-  }
 
   filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
   dir.create(filtpath)
+  
   fastqFs <- sort(list.files(path, pattern="R1_001.*"))
   fastqRs <- sort(list.files(path, pattern="R2_001.*"))
   
@@ -289,17 +250,15 @@ for (i in 1:length(runs)){
 
   # post filtering plot
   filtFs <- sort(list.files(filtpath, pattern="R1_001.*", full.names = TRUE))
-  #filtRs <- sort(list.files(filtpath, pattern="R2_001.*", full.names = TRUE))
-  
-  sampleF <- sample(filtFs, 12)
+  sampleF <- sample(filtFs, readQC_subsample)
   sampleR <- sampleF %>% str_replace(pattern="R1_001", replacement = "R2_001")
   
-  p1 <- plotQualityProfile(sampleF, aggregate = FALSE) + ggtitle(paste0(runs[i]," Forward Reads")) 
-  p2 <- plotQualityProfile(sampleR, aggregate = FALSE) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  p1 <- plotQualityProfile(sampleF, aggregate = readQC_aggregate) + ggtitle(paste0(runs[i]," Forward Reads")) 
+  p2 <- plotQualityProfile(sampleR, aggregate = readQC_aggregate) + ggtitle(paste0(runs[i]," Reverse Reads"))
   
   #output plots
-  dir.create("output/figures/")
-  pdf(paste0("output/figures/",runs[i],"_postfilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
+  dir.create(paste0(output,"/figures/"))
+  pdf(paste0(output,"/figures/",runs[i],"_postfilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
   plot(p1)
   plot(p2)
   dev.off()
@@ -309,13 +268,13 @@ filtered_out %>%
   map(as_tibble, rownames=NA) %>%
   map(rownames_to_column, var="Sample") %>%
   bind_rows() %>%
-  write_tsv("logs/filtered.tsv")
-  print(filtered_out)
+  write_tsv(paste0(logs,"/filtered.tsv"))
+print(filtered_out)
 
 ```
 
 
-# Sequence processing
+# DADA2
 
 ## Infer sequence variants for each run
 
