@@ -10,7 +10,7 @@ Chimera removal, pseudogene filterign and taxonomy addition
 Interactive analysis using seqscope
 
 However, there are 2 seperate workflows and vignettes available:
-* Local version for analysis on windows/linux PC
+* [Local version for analysis on windows/linux PC](https://alexpiper.github.io/iMapPESTS/local_metabarcoding.html)
 * Slurm cluster version for analysis on Agriculture Victoria BASC server
 
 Before starting, i recommend learning about the individual componenets of the workflow:
