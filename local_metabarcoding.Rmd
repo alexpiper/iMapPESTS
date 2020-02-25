@@ -698,9 +698,9 @@ try(dev.off(), silent=TRUE)
 ```
 
 
-# Assign taxonomy with IDTAXA & Exact matching
+# Assign taxonomy with IDTAXA
 
-Now that we have a cleaned table of sequences and their abundances across samples, we need to assign taxonomy to the sequences in order to identify taxa. We will use the IDTAXA algorithm of Murali et al 2018. IDTAXA requires training on a curated reference database and a pre-trained classifier, which can be found in the reference folder, alternatively see the taxreturn r package if you wish to curate a reference database and train a new classifier. Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences to species level.
+Now that we have a cleaned table of sequences and their abundances across samples, we need to assign taxonomy to the sequences in order to identify taxa. We will use the IDTAXA algorithm of Murali et al 2018. IDTAXA requires training on a curated reference database and a pre-trained classifier, which can be found in the reference folder, alternatively see the taxreturn r package if you wish to curate a reference database and train a new classifier.
 
 ```{r IDTAXA}
 seqtab.final <- readRDS("output/rds/seqtab_final.rds")
