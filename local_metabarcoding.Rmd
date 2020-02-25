@@ -58,19 +58,20 @@ Also copy these files from the original run directory in group/sequencing to thi
 * runParameters.xml
 
 The directory structure should be as follows
-root/
-├── data/
-│   ├── CJL7D/
-│   │  ├── R1.fastq.gz
-│   │  ├── R2.fastq.gz
-│   │  ├── runInfo.xml
-│   │  ├── runParameters.xml
-│   │  ├── SampleSheet.csv
-│   │  └── InterOp/
-│   └── run2/
-├── sample_data/
-├── output/
-└── doc/
+
+    root/
+    ├── data/
+    │   ├── CJL7D/
+    │   │  ├── R1.fastq.gz
+    │   │  ├── R2.fastq.gz
+    │   │  ├── runInfo.xml
+    │   │  ├── runParameters.xml
+    │   │  ├── SampleSheet.csv
+    │   │  └── InterOp/
+    │   └── run2/
+    ├── sample_data/
+    ├── output/
+    └── doc/
 
 
 # R install and setup directories
