@@ -554,7 +554,8 @@ randomize = TRUE # Pick samples randomly to learn errors
 pool = "pseudo" # Higher accuracy for low abundance at expense of runtime. Set to FALSE for a faster run
 
 dada_out <- vector("list", length=length(runs))
-for (i in seq(along=runs)){
+i=1
+for (i in 1:length(runs)){
   
   run_data <- samdf %>%
     filter(FCID == runs[i])
