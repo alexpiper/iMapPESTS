@@ -153,7 +153,8 @@ We will also add the relevant primers at this stage to this sheet:
 
 ```{r create samplesheet}
 runs <- dir("data/")
-for (i in seq(along=runs)){
+i=1
+for (i in 1:length(runs)){
   path <- paste0("data/", runs[i]) 
   
   ## Need to allow create samplesheet to read in multiple!
@@ -171,7 +172,6 @@ samdf <- samdf %>%
            ))
 
 write_csv(samdf, "sample_data/Sample_info.csv")
-
 ```
 
 # Quality checks:
@@ -191,6 +191,7 @@ for (i in 1:length(runs)){
   path <- paste0("data/", runs[i], "/")
   fc <- savR(path)
   qc.dir <- paste0("output/logs/", runs[i],"/" )
+  dir.create(qc.dir, recursive = TRUE)
   write_csv(correctedIntensities(fc), paste0(qc.dir, "correctedIntensities.csv"))
   write_csv(errorMetrics(fc), paste0(qc.dir, "errorMetrics.csv"))
   write_csv(extractionMetrics(fc), paste0(qc.dir, "extractionMetrics.csv"))
@@ -250,16 +251,20 @@ for (i in 1:length(runs)){
                     str_replace(pattern = "^(.*)\\/", replacement="") %>%
                     str_replace(pattern = "(?:.(?!_R1_))+$", replacement=""))
 
-  #Create mismatch, if demultiplexing was conducted with barcodemismatch
+  index <- indices %>% 
+  	filter(!str_detect(Sample_Name, "Undetermined")) %>%
+  	pull(index)
+  index2 <- indices %>% 
+  	filter(!str_detect(Sample_Name, "Undetermined")) %>%
+  	pull(index2)
+
+  ##Create mismatch, if demultiplexing was conducted with barcodemismatch
   if(barcodemismatch > 0){
-    index <- purrr::map(run_data$index, create_mismatch, barcodemismatch) %>%
+    index <- purrr::map(index, create_mismatch, barcodemismatch) %>%
       unlist()
-    index2 <- purrr::map(run_data$index2, create_mismatch, barcodemismatch) %>%
+    index2 <- purrr::map(index2, create_mismatch, barcodemismatch) %>%
       unlist()
-  } else if (barcodemismatch == 0 ){
-    index <- run_data$index
-    index2 <- run_data$index2
-  }
+  } 
   
   #Create all possible switched combinations
   combos <- unique(expand.grid(index, index2)) %>%
