@@ -152,16 +152,12 @@ We will also add the relevant primers at this stage to this sheet:
         fwhR2n_P7	GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT	GTRATWGCHCCDGCTARWACWGG
 
 ```{r create samplesheet}
-runs <- dir("data/")
-i=1
-for (i in 1:length(runs)){
-  path <- paste0("data/", runs[i]) 
-  
-  ## Need to allow create samplesheet to read in multiple!
-  samdf <- seqateurs::create_samplesheet(SampleSheet = paste0(path,"/SampleSheet.csv"),
-                            runParameters = paste0(path,"/runParameters.xml"),
-                            format="miseq")
-}
+runs <- dir("data/") #Find all directories within data
+SampleSheets <- paste0("data/", runs, "/SampleSheet.csv")
+runParameters <- paste0("data/", runs, "/runParameters.xml")
+
+## Need to allow create samplesheet to read in multiple!
+samdf <- seqateurs::create_samplesheet(SampleSheet = SampleSheets, runParameters = runParameters)
 
 # Add primers to samdf - 2 different reverse primers were used
 samdf <- samdf %>% 
