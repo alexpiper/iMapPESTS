@@ -94,6 +94,7 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "stringi",
                     "phangorn")
 .bioc_packages <- c("dada2",
+                    "biofiles",
                     "phyloseq",
                     "DECIPHER",
                     "Biostrings",
