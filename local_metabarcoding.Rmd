@@ -76,25 +76,22 @@ The directory structure should be as follows
 
 # R install and setup directories
 
-This pipeline requires various R packages to be installed prior to running. These are obtained from CRAN, Bioconductor and Github. The taxreturn and seqateurs packageR package also provide wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
+This pipeline requires various R packages to be installed prior to running. These are obtained from CRAN, Bioconductor and Github. The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
 
 ```{r install & Load packages} 
 #Set required packages
 .cran_packages <- c("ggplot2",
                     "gridExtra",
                     "tidyverse", 
-                    "scales",
                     "stringdist",
                     "patchwork",
                     "vegan",
-                    "ggpubr",
                     "seqinr",
                     "patchwork",
                     "savR",
                     "stringi",
                     "phangorn")
 .bioc_packages <- c("dada2",
-                    "biofiles",
                     "phyloseq",
                     "DECIPHER",
                     "Biostrings",
@@ -115,14 +112,8 @@ if(any(!.inst)) {
 #Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
-devtools::install_github("alexpiper/taxreturn")
 devtools::install_github("alexpiper/seqateurs")
-
-library(taxreturn)
 library(seqateurs)
-
-#Install blast
-blast_install(dest.dir = "bin")
 
 #Install bbmap
 bbmap_install(dest.dir = "bin")
@@ -309,7 +300,7 @@ for (i in 1:length(runs)){
 # Trim Primers
 
 DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm. 
-For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files. the taxreturn R package contains a wrapper to call bbduk from R to trim primers.
+For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files. the seqateurs R package contains a wrapper to call bbduk from R to trim primers.
 
 ```{r primer trimming , message=FALSE}
 #Load sample sheet
@@ -732,7 +723,7 @@ tax <- t(sapply(ids, function(x) {
   as.data.frame()  %T>%
   write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
-  taxreturn::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
+  seqateurs::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
   magrittr::set_rownames(getSequences(seqtab.final)) %>%
   as.matrix()
 
