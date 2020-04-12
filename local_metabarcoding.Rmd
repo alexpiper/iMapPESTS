@@ -1,7 +1,7 @@
 ---
 title: "iMapPESTS local metabarcoding workflow V2"
 author: "A.M. Piper"
-date: "2020/02/25"
+date: "2020/04/12"
 output:
   
   html_document:
@@ -88,7 +88,6 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "vegan",
                     "seqinr",
                     "patchwork",
-                    "savR",
                     "stringi",
                     "phangorn")
 .bioc_packages <- c("dada2",
@@ -96,6 +95,7 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "DECIPHER",
                     "Biostrings",
                     "ShortRead",
+                    "savR",
                     "ngsReports")
 
 .inst <- .cran_packages %in% installed.packages()
@@ -239,26 +239,12 @@ for (i in 1:length(runs)){
                     str_replace(pattern = "^(.*)\\/", replacement="") %>%
                     str_replace(pattern = "(?:.(?!_R1_))+$", replacement=""))
 
-  index <- indices %>% 
-  	filter(!str_detect(Sample_Name, "Undetermined")) %>%
-  	pull(index)
-  index2 <- indices %>% 
-  	filter(!str_detect(Sample_Name, "Undetermined")) %>%
-  	pull(index2)
+  combos <- indices %>% 
+    filter(!str_detect(Sample_Name, "Undetermined")) %>%
+    select(index, index2) %>%
+    expand(index, index2)
 
-  ##Create mismatch, if demultiplexing was conducted with barcodemismatch
-  if(barcodemismatch > 0){
-    index <- purrr::map(index, create_mismatch, barcodemismatch) %>%
-      unlist()
-    index2 <- purrr::map(index2, create_mismatch, barcodemismatch) %>%
-      unlist()
-  } 
-  
-  #Create all possible switched combinations
-  combos <- unique(expand.grid(index, index2)) %>%
-    set_colnames(c("index", "index2"))
-
-  #get unused combinations resulting from index switching - NEED TO ENUMERATE MISMATCH
+  #get unused combinations resulting from index switching
   switched <- left_join(combos, indices, by=c("index", "index2")) %>%
     drop_na()
   
@@ -272,11 +258,10 @@ for (i in 1:length(runs)){
   obs_rate <- switched %>% 
     filter(str_detect(Sample_Name,"Undetermined"))
   switch_rate <- (sum(obs_rate$Freq)/sum(exp_rate$Freq))
-    message(switch_rate)
+    message("Index switching rate calculated as: ", switch_rate)
 
   #Plot switching
-  
-  gg.switch <- ggplot(data = switched, aes(x = index, y = index2), stat="identity") +
+    gg.switch <- ggplot(data = switched, aes(x = index, y = index2), stat="identity") +
     geom_tile(aes(fill = Freq),alpha=0.8)  + 
     scale_fill_viridis_c(name="log10 Reads", begin=0.1, trans="log10")+
     theme(axis.text.x = element_text(angle=90, hjust=1), 
