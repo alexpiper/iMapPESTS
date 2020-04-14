@@ -9,7 +9,7 @@ There are 2 seperate workflows and vignettes available:
 Before starting, i recommend learning about the individual componenets of the workflow:
 * [The DADA2 algorithm](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4927377/)
 * [The benefits of amplicon sequence variants over OTU's](https://www.nature.com/articles/ismej2017119)
-* [Taxonomic assignment using IDTAXA] (https://microbiomejournal.biomedcentral.com/articles/10.1186/s40168-018-0521-5)
+* [Taxonomic assignment using IDTAXA](https://microbiomejournal.biomedcentral.com/articles/10.1186/s40168-018-0521-5)
 
 Some other helpful tutorials include:
 
