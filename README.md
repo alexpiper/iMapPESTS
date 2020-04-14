@@ -1,21 +1,15 @@
 # iMapPESTS
 
-This repository contains an organised metabarcoding pipeline based around the DADA2 algorithm and workflow, as used for analysing metabarcoding data from the iMapPESTS project.
-This repostiory has a predeterined directories structure so you can clone the repository and use it as the backbone for your project
+This repository contains an R based workflow based around the DADA2 algorithm for analysing metabarcoding data generated through the iMapPESTS project.
 
-The pipeline is divided into 4 major steps:
-QC of reads and run Data
-Trimming and quality filtering of reads, and DADA2 algorithm
-Chimera removal, pseudogene filterign and taxonomy addition
-Interactive analysis using seqscope
-
-However, there are 2 seperate workflows and vignettes available:
+There are 2 seperate workflows and vignettes available:
 * [Local version for analysis on windows/linux PC](https://alexpiper.github.io/iMapPESTS/local_metabarcoding.html)
 * Slurm cluster version for analysis on Agriculture Victoria BASC server **COMING SOON**
 
 Before starting, i recommend learning about the individual componenets of the workflow:
-* The dada2 algorithm 
-* Taxonomic assignment
+* [The DADA2 algorithm](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4927377/)
+* [The benefits of amplicon sequence variants over OTU's](https://www.nature.com/articles/ismej2017119)
+* [Taxonomic assignment using IDTAXA] (https://microbiomejournal.biomedcentral.com/articles/10.1186/s40168-018-0521-5)
 
 Some other helpful tutorials include:
 
