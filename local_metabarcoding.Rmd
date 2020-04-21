@@ -116,10 +116,10 @@ devtools::install_github("alexpiper/seqateurs")
 library(seqateurs)
 
 #Install bbmap
-bbmap_install(dest.dir = "bin")
+seqateurs::bbmap_install(dest.dir = "bin")
 
 #Install fastqc
-fastqc_install(dest.dir = "bin")
+seqateurs::fastqc_install(dest.dir = "bin")
 
 # Create directories
 if(!dir.exists("data")){dir.create("data", recursive = TRUE)}
