@@ -1,7 +1,7 @@
 ---
 title: "iMapPESTS local metabarcoding workflow V2"
 author: "A.M. Piper"
-date: "2020/04/12"
+date: "2020/04/21"
 output:
   
   html_document:
