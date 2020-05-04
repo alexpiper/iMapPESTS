@@ -240,9 +240,9 @@ for (i in 1:length(runs)){
                     str_replace(pattern = "(?:.(?!_R1_))+$", replacement=""))
 
   combos <- indices %>% 
-    filter(!str_detect(Sample_Name, "Undetermined")) %>%
-    select(index, index2) %>%
-    expand(index, index2)
+    dplyr::filter(!str_detect(Sample_Name, "Undetermined")) %>%
+    dplyr::select(index, index2) %>%
+    tidyr::expand(index, index2)
 
   #get unused combinations resulting from index switching
   switched <- left_join(combos, indices, by=c("index", "index2")) %>%
