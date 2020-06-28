@@ -916,7 +916,8 @@ We will use the IDTAXA algorithm of Murali et al 2018. IDTAXA requires training 
 
 ```{r IDTAXA}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
-ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") # ranks of interest
+# NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
+ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") 
 
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa.rds")
@@ -955,7 +956,8 @@ Alternatively, we can use the IDTAXA algorithm alongside exact matching assignme
 
 ```{r IDTAXA Exact}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
-ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") # ranks of interest
+# NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
+ranks <-  c("Root", "Phylum", "Class", "Order", "Family", "Genus", "Species") 
 
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa.rds")
@@ -974,7 +976,7 @@ tax <- t(sapply(ids, function(x) {
     taxa
   })) %>%
   purrr::map(unlist) %>%
-  stri_list2matrix(byrow=TRUE, fill=NA) %>%
+  stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
   magrittr::set_colnames(ranks) %>%
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.data.frame()  %T>%
