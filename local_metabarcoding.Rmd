@@ -29,7 +29,15 @@ opts_chunk$set(dev = 'png')
 
 
 # Demultiplex sequencing reads
-For this workflow to run, we need to first demultiplex the miseq run again as the miseq does not put indexes in fasta headers by defualt
+For this workflow to run, we need to first demultiplex the miseq run again as the miseq does not put indexes in fasta headers by default, and also obtain some necessary files from the sequencing folder. The below code is written for the Agriculture Victoria BASC server, and the locations will be different if you are using a different HPC cluster.
+
+The output directory should be unique for each sequencing run, named as the flowcell id, within a directory called data
+
+For example:
+
+    root/
+      ├── data/
+         ├── CJL7D/
 
 BASH:
 ```{bash demultiplex 1 mismatch}
@@ -39,25 +47,43 @@ module load bcl2fastq2/2.20.0-foss-2018b
 #raise amount of available file handles
 ulimit -n 4000
 
-#BCL2fastq
-bcl2fastq -p 12 --runfolder-dir /group/sequencing/200203_M03633_0388_000000000-CJL7D \
---output-dir /group/pathogens/Alexp/Metabarcoding/imappests/CJL7D \
---sample-sheet /group/pathogens/Alexp/Metabarcoding/imappests/CJL7D/SampleSheet.csv \
+###Run1
+
+#Set up input and outputs
+inputdir=/group/sequencing/190412_M03633_0313_000000000-CGK9B #CHANGE TO YOUR SEQ RUN
+outputdir=/group/pathogens/Alexp/Metabarcoding/imappests/data/CGK9B #CHANGE TO YOUR DATA FOLDER RUN
+samplesheet=/group/pathogens/Alexp/Metabarcoding/imappests/data/CGK9B/SampleSheet_CGK9B.csv #CHANGE TO YOUR SAMPLESHEET
+
+# convert samplesheet to unix format
+dos2unix $samplesheet
+
+#Demultiplex
+bcl2fastq -p 12 --runfolder-dir $inputdir \
+--output-dir $outputdir \
+--sample-sheet $samplesheet \
 --no-lane-splitting --barcode-mismatches 1
+
+# Copy other necessary files and move fastqs
+cd $outputdir
+cp -r $inputdir/InterOp $outputdir
+cp $inputdir/RunInfo.xml $outputdir
+cp $inputdir/runParameters.xml $outputdir
+cp $samplesheet $outputdir
+mv **/*.fastq.gz $outputdir
+
+# Append FCID to start of sample names if missing
+fcid=$(echo $inputdir | sed 's/^.*-//')
+for i in *.fastq.gz; do
+  if ! [[ $i == $fcid* ]]; then
+  new=$(echo ${fcid} ${i}) #append together
+  new=$(echo ${new// /_}) #remove any whitespace
+  mv -v "$i" "$new"
+  fi
+done
 
 ```
 
-
-After the run has been demultiplexed, copy the following files into a new folder within the data directory, and name this folder for by the flowcell used:
-* Demultiplexed forward and reverse reads
-* Undetermined forward and reverse reads
-
-Also copy these files from the original run directory in group/sequencing to this directory
-* InterOp directory
-* runInfo.xml
-* runParameters.xml
-
-The directory structure should be as follows
+The directory structure should now look something like this:
 
     root/
     ├── data/
@@ -68,11 +94,12 @@ The directory structure should be as follows
     │   │  ├── runParameters.xml
     │   │  ├── SampleSheet.csv
     │   │  └── InterOp/
-    │   └── run2/
+    │   └── FCID2/
     ├── sample_data/
     ├── output/
     └── doc/
 
+If you don't have the sample_data, output and doc folders yet they will be made in the next step
 
 # R install and setup directories
 
@@ -133,7 +160,7 @@ if(!dir.exists("sample_data")){dir.create("sample_data", recursive = TRUE)}
 
 ## Create sample sheet 
 
-In order to track samples and relevant QC statistics throughout the metabarcoding pipeline, we will first create a new samplesheet from our input samplesheets. This function requires both the SampleSheet.csv used for the sequencing run, and the runParameters.xml, both of which can be obtained from the demultiplexed sequencing run folder/
+In order to track samples and relevant QC statistics throughout the metabarcoding pipeline, we will first create a new samplesheet from our input samplesheets. This function requires both the SampleSheet.csv used for the sequencing run, and the runParameters.xml, both of which should have been automatically obtained from the demultiplexed sequencing run folder in the bash step above
 
 ```{r create samplesheet}
 runs <- dir("data/") #Find all directories within data
