@@ -101,7 +101,7 @@ The directory structure should now look something like this:
 
 If you don't have the sample_data, output and doc folders yet they will be made in the next step
 
-# R install and setup directories
+# Install packages and setup directories
 
 This pipeline requires various R packages to be installed prior to running. These are obtained from CRAN, Bioconductor and Github. The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
 
@@ -1193,10 +1193,11 @@ if(nrow(seqtab_final) > nrow(sample_data(ps))){
 saveRDS(ps, "output/rds/ps.rds") 
 
 #Export raw csv
-export <- speedyseq::psmelt(ps) %>%
-  filter(Abundance > 0)
-write.csv(export, file = "output/results/unfiltered/rawdata.csv")
-
+speedyseq::psmelt(ps) %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(-Sample) %>%
+  write_csv("output/results/unfiltered/raw_combined.csv")
+  
 #Summary export
 seqateurs::summarise_taxa(ps, "Species", "sample_id") %>%
   spread(key="sample_id", value="totalRA") %>%
@@ -1298,20 +1299,26 @@ We will output the final 3 filtered CSVs which will be uploaded to the imappests
 ```{R output csvs}
 seqtab <- otu_table(ps1) %>%
   as("matrix") %>%
-  as.data.frame()
+  as_tibble(rownames = "sample_id")
 
 taxtab <- tax_table(ps1) %>%
   as("matrix") %>%
-  as.data.frame()
+  as_tibble(rownames = "OTU")
 
 samdf <- sample_data(ps1) %>%
   as("matrix") %>%
-  as.data.frame()
+  as_tibble()
 
 # Write out
 write_csv(seqtab, "output/results/final/seqtab.csv")
 write_csv(taxtab, "output/results/final/taxtab.csv")
 write_csv(samdf, "output/results/final/samdf.csv")
+
+#Write out combined
+speedyseq::psmelt(ps1) %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(-Sample) %>%
+  write_csv("output/results/filtered/combined.csv")
 ```
 
 
