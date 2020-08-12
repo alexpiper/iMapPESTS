@@ -117,7 +117,8 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "seqinr",
                     "patchwork",
                     "stringi",
-                    "phangorn")
+                    "phangorn".
+                    "magrittr")
 .bioc_packages <- c("dada2",
                     "phyloseq",
                     "DECIPHER",
@@ -946,7 +947,7 @@ We will use the IDTAXA algorithm of Murali et al 2018 to assign taxonomy to the 
 ```{r IDTAXA}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 # NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
-ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") 
+ranks <-  c("Root", "Phylum","Class", "Order", "Family", "Genus","Species") 
 
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa.rds")
@@ -960,19 +961,18 @@ try(dev.off(), silent=TRUE)
 
 #Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
 tax <- t(sapply(ids, function(x) {
-    taxa <- paste0(x$taxon,"_", x$confidence)
-    taxa[startsWith(taxa, "unclassified_")] <- NA
-    taxa
-  })) %>%
+  taxa <- paste0(x$taxon,"_", x$confidence)
+  taxa[startsWith(taxa, "unclassified_")] <- NA
+  taxa
+})) %>%
   purrr::map(unlist) %>%
   stri_list2matrix(byrow=TRUE, fill=NA) %>%
   magrittr::set_colnames(ranks) %>%
-  magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.data.frame()  %T>%
   write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
-  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   as.matrix()
 
 # Write taxonomy table to disk
@@ -986,7 +986,7 @@ Alternatively, we can use the IDTAXA algorithm alongside exact matching assignme
 ```{r IDTAXA Exact}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 # NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
-ranks <-  c("Root", "Phylum", "Class", "Order", "Family", "Genus", "Species") 
+ranks <-  c("Root", "Phylum","Class", "Order", "Family", "Genus","Species") 
 
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa.rds")
@@ -1000,19 +1000,18 @@ try(dev.off(), silent=TRUE)
 
 #Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
 tax <- t(sapply(ids, function(x) {
-    taxa <- paste0(x$taxon,"_", x$confidence)
-    taxa[startsWith(taxa, "unclassified_")] <- NA
-    taxa
-  })) %>%
+  taxa <- paste0(x$taxon,"_", x$confidence)
+  taxa[startsWith(taxa, "unclassified_")] <- NA
+  taxa
+})) %>%
   purrr::map(unlist) %>%
-  stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
+  stri_list2matrix(byrow=TRUE, fill=NA) %>%
   magrittr::set_colnames(ranks) %>%
   as.data.frame()  %T>%
   write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
-  seqateurs::na_to_unclassified(rownames=TRUE) %>% #Propagate high order ranks to unassigned ASV'
-  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   as.matrix()
 
 #Further assign to species rank using exact matching
