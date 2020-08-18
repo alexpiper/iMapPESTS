@@ -117,7 +117,7 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "seqinr",
                     "patchwork",
                     "stringi",
-                    "phangorn".
+                    "phangorn",
                     "magrittr")
 .bioc_packages <- c("dada2",
                     "phyloseq",
@@ -939,57 +939,21 @@ try(dev.off(), silent=TRUE)
 
 # Assign taxonomy  {.tabset}
 
-Now that we have a cleaned table of sequences and their abundances across samples, we need to assign taxonomy to the sequences in order to identify taxa. There are a number of different classifiers you can use to do this, however i recommend IDTAXA. For other options select the tabs below
+Now that we have a cleaned table of sequences and their abundances across samples, we need to assign taxonomy to the sequences in order to identify taxa. The default approach is currently to use IDTAXA to assign heirarchial taxonomy, followed by a BLAST search for increased species level assignment. However there are a number of alternative classifiers you can use to do this, a few of which are represented in the tabs below.
 
-## IDTAXA
+## IDTAXA + BLAST
+
 We will use the IDTAXA algorithm of Murali et al 2018 to assign taxonomy to the ASVs. IDTAXA requires a pre-trained classifier, which can be found in the reference folder, alternatively see the taxreturn r package if you wish to curate a reference database and train a new classifier.
 
-```{r IDTAXA}
+To increase classification to species level, we will also incorporate a BLAST search. However as top hit assignment methods such as BLAST do not take the context of other sequences into account, to reduce the risk of over-classification we will only assign an ASV to species rank if the BLAST search agrees with IDTAXA at the Genus rank. 
+
+```{r IDTAXA BLAST}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 # NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
-ranks <-  c("Root", "Phylum","Class", "Order", "Family", "Genus","Species") 
+ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") 
 
 #Classify using IDTAXA
-trainingSet <- readRDS("reference/idtaxa.rds")
-dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
-ids <- IdTaxa(dna, trainingSet, processors=2, threshold = 60, verbose=TRUE) 
-
-# Output plot of ids
-pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
-  plot(ids)
-try(dev.off(), silent=TRUE)
-
-#Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
-tax <- t(sapply(ids, function(x) {
-  taxa <- paste0(x$taxon,"_", x$confidence)
-  taxa[startsWith(taxa, "unclassified_")] <- NA
-  taxa
-})) %>%
-  purrr::map(unlist) %>%
-  stri_list2matrix(byrow=TRUE, fill=NA) %>%
-  magrittr::set_colnames(ranks) %>%
-  as.data.frame()  %T>%
-  write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
-  mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
-  magrittr::set_rownames(getSequences(seqtab_final)) %>%
-  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
-  as.matrix()
-
-# Write taxonomy table to disk
-saveRDS(tax, "output/rds/tax.rds") 
-```
-
-## IDTAXA + Exact Matching
-
-Alternatively, we can use the IDTAXA algorithm alongside exact matching assignment. This can be particularly useful when matching mock communities against in-house reference databases. However as this doesnt take the context of other sequences into account, when using on larger databases watch out for false positives due to misannotated reference sequences.
-
-```{r IDTAXA Exact}
-seqtab_final <- readRDS("output/rds/seqtab_final.rds")
-# NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
-ranks <-  c("Root", "Phylum","Class", "Order", "Family", "Genus","Species") 
-
-#Classify using IDTAXA
-trainingSet <- readRDS("reference/idtaxa.rds")
+trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
 ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
 
@@ -1007,38 +971,126 @@ tax <- t(sapply(ids, function(x) {
   purrr::map(unlist) %>%
   stri_list2matrix(byrow=TRUE, fill=NA) %>%
   magrittr::set_colnames(ranks) %>%
-  as.data.frame()  %T>%
+  as.data.frame() %>%
+magrittr::set_rownames(getSequences(seqtab_final)) %T>%
+  write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
+  mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) 
+
+# Top hit with BLAST
+blast_spp <- blast_assign_species(query=seqs,db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=97, coverage=95, evalue=1e06, maxtargetseqs=5, maxhsp=5, ranks=ranks, delim=";") %>%
+  dplyr::rename(blast_genus = Genus, blast_spp = Species) %>%
+  dplyr::filter(!is.na(blast_spp))
+
+#Join together
+tax_blast <- tax %>%
+  as_tibble(rownames = "OTU") %>%
+  left_join(blast_spp , by="OTU") %>%
+  dplyr::mutate(Species = case_when(
+    is.na(Species) & Genus == blast_genus ~ blast_spp,
+    !is.na(Species) ~ Species
+  )) %>%
+  dplyr::select(OTU, ranks) %>%
+  column_to_rownames("OTU") %>%
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
+  as.matrix()
+
+# Write taxonomy table to disk
+saveRDS(tax_blast, "output/rds/tax.rds") 
+```
+
+## IDTAXA + Exact Matching
+
+As an alternative to using BLAST, we can use exact 100% matches only to assign additional sequences to the species rank. This is particularly useful for bacterial metabarcoding as 100% matches have been shown to be the only valid method of assigning species to short bacterial 16s sequences. 
+
+```{r IDTAXA Exact}
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+# NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
+ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") 
+
+#Classify using IDTAXA
+trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
+dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
+ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
+
+# Output plot of ids
+pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(ids)
+try(dev.off(), silent=TRUE)
+
+#Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+tax <- t(sapply(ids, function(x) {
+  taxa <- paste0(x$taxon,"_", x$confidence)
+  taxa[startsWith(taxa, "unclassified_")] <- NA
+  taxa
+})) %>%
+  purrr::map(unlist) %>%
+  stri_list2matrix(byrow=TRUE, fill=NA) %>%
+  magrittr::set_colnames(ranks) %>%
+  as.data.frame() %>%
+magrittr::set_rownames(getSequences(seqtab_final)) %T>%
+  write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
+  mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) 
+
+#Further assign to species rank using exact matching
+exact <- assignSpecies(seqtab_final, "reference/insecta_binomial_bftrimmed.fa.gz", allowMultiple = TRUE, tryRC = TRUE, verbose = FALSE) %>%
+    as_tibble(rownames = "OTU") %>%
+    filter(!is.na(Species)) %>%
+    dplyr::mutate(binomial = paste0(Genus," ",Species)) %>%
+     dplyr::rename(exact_genus = Genus, exact_species = Species)
+
+#Merge together
+tax_exact <- tax %>%
+  as_tibble(rownames = "OTU") %>%
+  left_join(exact, by="OTU") %>%
+  dplyr::mutate(Species = case_when(
+    is.na(Species) & Genus == exact_genus ~ binomial,
+    !is.na(Species) ~ Species
+  )) %>%
+dplyr::select(OTU, ranks) %>%
+  column_to_rownames("OTU") %>%
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
+  as.matrix()
+
+# Write taxonomy table to disk
+saveRDS(tax_exact, "output/rds/tax.rds") 
+```
+
+## IDTAXA
+Alternatively, we can use the IDTAXA classifier by itself with no supplementary assignment
+
+```{r IDTAXA}
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+# NOTE: these ranks may differ for different training sets. Check your training set to avoid an error
+ranks <-  c("Root","Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") 
+
+#Classify using IDTAXA
+trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
+dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
+ids <- IdTaxa(dna, trainingSet, processors=2, threshold = 60, verbose=TRUE) 
+
+# Output plot of ids
+pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(ids)
+try(dev.off(), silent=TRUE)
+
+#Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+tax <- t(sapply(ids, function(x) {
+  taxa <- paste0(x$taxon,"_", x$confidence)
+  taxa[startsWith(taxa, "unclassified_")] <- NA
+  taxa
+})) %>%
+  purrr::map(unlist) %>%
+  stri_list2matrix(byrow=TRUE, fill=NA) %>%
+  magrittr::set_colnames(ranks) %>%
+  as.data.frame() %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) %T>%
   write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
   seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   as.matrix()
-
-#Further assign to species rank using exact matching
-exact <- assignSpecies(seqtab_final, "reference/rdp_species.fa.gz", allowMultiple = TRUE, tryRC = TRUE, verbose = FALSE)
-
-exact <- exact %>% 
-  as.data.frame() %>%
-  rownames_to_column("OTU") %>%
-  mutate(binomial =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
-
-#merge together - JOIN BY OTU! - left_join?
-#For exact where Species is not NA, replace tax$Species where Species contains K__,P__,C__,O__,F__,G__
-pattern <- c("K__","P__","C__","O__","F__","G__")
-
-tax_exact <- left_join(
-  tax %>%
-    as.data.frame() %>%
-    rownames_to_column("OTU"), 
-  exact %>% 
-    select(OTU, binomial),
-  by="OTU")
-
-for (row in 1:nrow(tax)){
-  if   (str_detect(tax[row,7], paste(pattern, collapse="|")) && !is.na(exact$binomial[row]) == TRUE ) {
-    tax[row,7] <- exact$binomial[row]
-  }
-}
 
 # Write taxonomy table to disk
 saveRDS(tax, "output/rds/tax.rds") 
@@ -1046,41 +1098,27 @@ saveRDS(tax, "output/rds/tax.rds")
 
 ## RDP + Exact Matching
 
-**WARNING: THIS HAS NOT YET BEEN TESTED**
-
-Alternatively, the RDP classifier can be used
+Alternatively, the RDP classifier can be used to assign heirarchial taxonomy to the ASVs using the convenient assigntaxonomy wrapper function within DADA2
 
 ```{r RDP classifier, class.source="bg-danger"}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 
 # Assign Kingdom:Genus taxonomy using RDP classifier
-tax <- assignTaxonomy(seqtab_final, "reference/rdp_genus.fa.gz", multithread=TRUE, minBoot=60, outputBootstraps=FALSE)
-colnames(tax) <- c("Root", "Phylum", "Class", "Order", "Family", "Genus")
+tax <- assignTaxonomy(seqtab_final, "reference/insecta_hierarchial_bftrimmed.fa.gz", multithread=FALSE, minBoot=60, outputBootstraps=FALSE)
+colnames(tax) <- c("Root","Kingdom", "Phylum","Class", "Order", "Family", "Genus", "Species") 
 
 ##add species to taxtable using exact matching
-tax_plus <- addSpecies(tax, "reference/rdp_species.fa.gz", allowMultiple=TRUE)
+tax_plus <- addSpecies(tax, "reference/insecta_binomial_bftrimmed.fa.gz", allowMultiple=TRUE)
 
-tax_plus <- propagate_tax(tax_plus,from="Family")
+tax_plus <- na_to_unclassified(tax_plus)
 
 # Write taxonomy table to disk
-saveRDS(tax, "output/rds/tax.rds") 
-
-saveRDS(tax, "output/rds/tax_rdp.rds") 
-
-tax <- readRDS("output/rds/tax_rdp.rds")
-
-#Something wrong here?
+saveRDS(tax_plus, "output/rds/tax.rds") 
 ```
 
-## Blast Top Hit
+# Optional - Top hit identity distribution {-}
 
-**WARNING: THIS HAS NOT YET BEEN TESTED**
-
-Finally, the blast top hit can be used. note this is NOT RECOMMENDED due to being prone to false positives
-
-**TODO: Add BLAST top hit search over internet to genbank**
-
-# Optional - Compare to a BLAST top hit  {-}
+This will produce a plot that summarises the taxonomy assigned to each ASV in comparison to the percentage identity between that ASV and the most similar sequence in the reference database. This provides a good summary of both how well the taxonomic assignment algorithm has performed, as well as how well the communities under study are represented within the reference database. 
 
 ```{R top hit dist}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
@@ -1089,20 +1127,13 @@ tax <- readRDS("output/rds/tax.rds")
 seqs <- insect::char2dna(colnames(seqtab_final))
 names(seqs) <- colnames(seqtab_final)
 
-out <- blast_top_hit(query=seqs, db="reference/heirarchial.fa.gz", threshold=60 )
-saveRDS(out, "output/rds/blast_top_hit.rds")
-
-# Blast counts only the aligned subsections when calculating % identity
-# Therefore we need to set a minimum and maximum alignment length allowed
-hist(out$length)
-allowed_lengths <- 180:210
+out <- blast_top_hit(query=seqs, db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=60, coverage=80)
 
 joint <- out %>% 
-  dplyr::select(OTU = qseqid, acc, blastspp = Species, pident, length, evalue) %>%
+  dplyr::select(OTU = qseqid, acc, blastspp = Species, pident, length, evalue, qcovs) %>%
   left_join(tax %>% 
               seqateurs::unclassified_to_na(rownames=FALSE) %>%
-              mutate(lowest = seqateurs::lowest_classified(.)), by="OTU") %>%
-  dplyr::filter(length %in% allowed_lengths) 
+              mutate(lowest = seqateurs::lowest_classified(.)), by="OTU")
 
 #Write out comparison between BLAST and Heiarchial assignment
 write_csv(joint, "output/logs/tax_assignment_comparison.csv")
@@ -1302,7 +1333,20 @@ seqtab <- otu_table(ps1) %>%
 
 taxtab <- tax_table(ps1) %>%
   as("matrix") %>%
-  as_tibble(rownames = "OTU")
+  as_tibble(rownames = "OTU") %>%
+  unclassified_to_na(rownames = FALSE)
+
+#Check taxonomy table outputs
+if(!colnames(taxtab) == c("OTU", "Root", "Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")){
+  message("Warning: Taxonomy table columns do not meet expectations for the staging database \n
+          Database requires the columns: OTU, Root, Kingdom, Phylum, Class, Order, Family, Genus, Species ")
+}
+
+if(any(str_detect(taxtab$Species, "/"))){
+  message("Warning: Taxonomy table contains taxa with clashes at the species level, these should be corrected before upload:")
+  clashes <- taxtab$Species[str_detect(taxtab$Species, "/")]
+  print(clashes[!is.na(clashes)])
+}
 
 samdf <- sample_data(ps1) %>%
   as("matrix") %>%
