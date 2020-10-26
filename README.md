@@ -6,6 +6,9 @@ There are 2 seperate workflows and vignettes available:
 * [Local version for analysis on windows/linux PC](https://alexpiper.github.io/iMapPESTS/local_metabarcoding.html)
 * Slurm cluster version for analysis on Agriculture Victoria BASC server **COMING SOON**
 
+The main workflow can be followed up with the following comparisons depending on what you are interested in
+* [Diversity analyses](https://alexpiper.github.io/iMapPESTS/diversity.html)
+
 Before starting, i recommend learning about the individual componenets of the workflow:
 * [The DADA2 algorithm](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4927377/)
 * [The benefits of amplicon sequence variants over OTU's](https://www.nature.com/articles/ismej2017119)
