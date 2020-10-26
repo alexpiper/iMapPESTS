@@ -72,6 +72,26 @@ library(seqateurs)
 ps <- readRDS("output/rds/ps.rds")
 ```
 
+# Optional - Exclude taxa that could not be clasified to Genus
+
+```{r filter unclassified}
+# Get list of Genus names to keep (those without "__")
+names_to_keep <- tax_table(ps) %>%
+  as("matrix") %>%
+  as_tibble(rownames = "OTU") %>%
+  filter(!str_detect(Genus, "__")) %>%
+  pull(Genus)
+
+ps_filtered <- ps %>%
+  subset_taxa(Genus %in% names_to_keep) %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE)  #Remove taxa with 0 reads
+
+message((ntaxa(ps) - ntaxa(ps_filtered)), " Taxa dropped")
+
+# Replace the orignal phyloseq object with the filtered one
+ps <- ps_filtered
+```
+
 
 # Alpha diversity (Unrarefied)
 
