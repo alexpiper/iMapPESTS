@@ -299,6 +299,14 @@ First calculate the following beta diversity between samples
 * Weighted Unifrac - A abundance and phylogenetic weighted metric
 
 ```{r Beta distances}
+# Make sure all samples and taxa without any reads are removed
+ps_filtered <- prune_samples(sample_sums(ps) > 0, ps)
+ps_filtered <- ps_filtered %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) 
+
+# set ps to the filtered one
+ps <- ps_filtered
+
 # Get OTU tables
 otutab <- otu_table(ps) %>%
   as("matrix")
