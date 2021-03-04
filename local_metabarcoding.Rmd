@@ -141,10 +141,10 @@ if(any(!.inst)) {
 #Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
-devtools::install_github("alexpiper/seqateurs")
+devtools::install_github("alexpiper/seqateurs", dependencies = TRUE)
 library(seqateurs)
 
-devtools::install_github("alexpiper/taxreturn")
+devtools::install_github("alexpiper/taxreturn", dependencies = TRUE)
 library(taxreturn)
 
 #Install bbmap
@@ -172,7 +172,7 @@ In order to track samples and relevant QC statistics throughout the metabarcodin
 ```{r create samplesheet}
 runs <- dir("data/") #Find all directories within data
 SampleSheet <- list.files(paste0("data/", runs), pattern= "SampleSheet", full.names = TRUE)
-runParameters <- list.files(paste0("data/", runs), pattern= "RunParameters.xml", full.names = TRUE)
+runParameters <- list.files(paste0("data/", runs), pattern= "runParameters.xml", full.names = TRUE)
 
 # Create samplesheet containing samples and run parameters for all runs
 samdf <- create_samplesheet(SampleSheet = SampleSheet, runParameters = runParameters, template = "V4") %>%
@@ -747,6 +747,7 @@ for (i in 1:length(runs)){
   
   # merge reads
   mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose = TRUE, minOverlap = 12, trimOverhang = TRUE) 
+  mergers <- mergers[sapply(mergers, nrow) > 0]
   bind_rows(mergers, .id="Sample") %>%
     mutate(Sample = str_replace(Sample, pattern="_S.*$", replacement="")) %>%
     write_csv(paste0("output/logs/",runs[i],"/",runs[i], "_mergers.csv"))
@@ -978,6 +979,9 @@ magrittr::set_rownames(getSequences(seqtab_final)) %T>%
   magrittr::set_rownames(getSequences(seqtab_final)) 
 
 # Top hit with BLAST
+seqs <-  insect::char2dna(colnames(seqtab_final))
+names(seqs) <- colnames(seqtab_final) 
+
 blast_spp <- blast_assign_species(query=seqs,db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=97, coverage=95, evalue=1e06, maxtargetseqs=5, maxhsp=5, ranks=ranks, delim=";") %>%
   dplyr::rename(blast_genus = Genus, blast_spp = Species) %>%
   dplyr::filter(!is.na(blast_spp))
@@ -992,7 +996,7 @@ tax_blast <- tax %>%
   )) %>%
   dplyr::select(OTU, ranks) %>%
   column_to_rownames("OTU") %>%
-  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASVs
   as.matrix()
 
 # Write taxonomy table to disk
@@ -1050,7 +1054,7 @@ tax_exact <- tax %>%
   )) %>%
 dplyr::select(OTU, ranks) %>%
   column_to_rownames("OTU") %>%
-  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASVs
   as.matrix()
 
 # Write taxonomy table to disk
@@ -1089,7 +1093,7 @@ tax <- t(sapply(ids, function(x) {
   write.csv("output/logs/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
-  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
+  seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASVs
   as.matrix()
 
 # Write taxonomy table to disk

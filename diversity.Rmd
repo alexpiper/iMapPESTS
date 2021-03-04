@@ -299,6 +299,10 @@ First calculate the following beta diversity between samples
 * Weighted Unifrac - A abundance and phylogenetic weighted metric
 
 ```{r Beta distances}
+
+# Read in francescos
+ps <- readRDS("ps.rds")
+
 # Make sure all samples and taxa without any reads are removed
 ps_filtered <- prune_samples(sample_sums(ps) > 0, ps)
 ps_filtered <- ps_filtered %>%
@@ -332,6 +336,10 @@ distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps),
                                                 ilr.weights='blw.sqrt'), method="euclidean"))
 distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps, weighted=FALSE, parallel = TRUE))
 distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps, weighted=TRUE, parallel = TRUE))
+
+
+# Remove any that didnt work
+distlist <- distlist[!sapply(distlist, is.null)]
 ```
 
 # Adonis and betadisper
@@ -347,7 +355,7 @@ metadata <- sample_data(ps) %>%
 adonis_results <- distlist %>%
   purrr::map(function(x) {
     bind_rows(
-    broom::tidy(adonis(x~sample_name, method="euclidean", data=metadata)$aov.tab) 
+    broom::tidy(adonis(x~extraction_method + fcid, method="euclidean", data=metadata)$aov.tab) 
     )
 })  %>%
   bind_rows(.id="dist")
@@ -374,19 +382,19 @@ write_csv(betadisper_results, "output/beta/adonis.csv")
 Finally we can plot a PCA plot of how things cluster with a different beta diversity metric
 
 ```{r pca plots}
-# Get desired distance to make the plot (here i am using philr)
-philr.dist <- as.dist(distlist$Philr)
+# Get desired distance to make the plot (here i am using Unifrac)
+plot.dist <- as.dist(distlist$WUnifrac)
 
 #Philr PCOA
-philr.pcoa <- ordinate(ps, 'PCoA', distance=philr.dist)
+plot.pcoa <- ordinate(ps, 'PCoA', distance=plot.dist)
 
-gg.pca <- plot_ordination(ps, philr.pcoa, color = "sample_name") +
+gg.pca <- plot_ordination(ps, plot.pcoa, color = "extraction_method") +
   geom_point(size=3, alpha=0.8) +
   geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
   geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
   #coord_fixed() +
-  theme(legend.position = "none") +
-  labs(colour = "Sample Type")
+  labs(colour = "fcid") +
+  theme(legend.position = "right") 
 
 gg.pca
 ```
