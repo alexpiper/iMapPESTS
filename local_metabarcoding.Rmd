@@ -124,6 +124,7 @@ This pipeline requires various R packages to be installed prior to running. Thes
                     "DECIPHER",
                     "Biostrings",
                     "ShortRead",
+                    "ggtree",
                     "savR",
                     "ngsReports")
 
@@ -146,6 +147,9 @@ library(seqateurs)
 
 devtools::install_github("alexpiper/taxreturn", dependencies = TRUE)
 library(taxreturn)
+
+devtools::install_github("mikemc/speedyseq", dependencies = TRUE)
+library(speedyseq)
 
 #Install bbmap
 seqateurs::bbmap_install(dest.dir = "bin")
@@ -190,6 +194,18 @@ logdf <- create_logsheet(SampleSheet = SampleSheet, runParameters = runParameter
 if(!nrow(samdf) == nrow(logdf)){
   warning("Samdf and logdf do not contain the same number of rows!")
 }
+
+# Check if sampleids contain fcid, if not; attatch
+samdf <- samdf %>%
+  mutate(sample_id = case_when(
+    !str_detect(sample_id, fcid) ~ paste0(fcid,"_",sample_id),
+    TRUE ~ sample_id
+  ))
+logdf <- logdf %>%
+  mutate(sample_id = case_when(
+    !str_detect(sample_id, fcid) ~ paste0(fcid,"_",sample_id),
+    TRUE ~ sample_id
+  ))
 
 # Check if samples match samplesheet
 fastqFs <- purrr::map(list.dirs("data", recursive=FALSE),
@@ -957,6 +973,7 @@ ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spe
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
 ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
+saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids
 pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
@@ -1016,6 +1033,7 @@ ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spe
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
 ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
+saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids
 pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
@@ -1073,6 +1091,7 @@ ranks <-  c("Root","Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spec
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
 ids <- IdTaxa(dna, trainingSet, processors=2, threshold = 60, verbose=TRUE) 
+saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids
 pdf(paste0("output/logs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
@@ -1110,6 +1129,7 @@ seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 # Assign Kingdom:Genus taxonomy using RDP classifier
 tax <- assignTaxonomy(seqtab_final, "reference/insecta_hierarchial_bftrimmed.fa.gz", multithread=FALSE, minBoot=60, outputBootstraps=FALSE)
 colnames(tax) <- c("Root","Kingdom", "Phylum","Class", "Order", "Family", "Genus", "Species") 
+saveRDS(tax, "output/rds/rdp.rds")
 
 ##add species to taxtable using exact matching
 tax_plus <- addSpecies(tax, "reference/insecta_binomial_bftrimmed.fa.gz", allowMultiple=TRUE)
