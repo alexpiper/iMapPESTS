@@ -67,7 +67,9 @@ bcl2fastq -p 12 --runfolder-dir $inputdir \
 cd $outputdir
 cp -r $inputdir/InterOp $outputdir
 cp $inputdir/RunInfo.xml $outputdir
+cp $inputdir/runInfo.xml $outputdir
 cp $inputdir/runParameters.xml $outputdir
+cp $inputdir/RunParameters.xml $outputdir
 cp $samplesheet $outputdir
 mv **/*.fastq.gz $outputdir
 
@@ -176,7 +178,7 @@ In order to track samples and relevant QC statistics throughout the metabarcodin
 ```{r create samplesheet}
 runs <- dir("data/") #Find all directories within data
 SampleSheet <- list.files(paste0("data/", runs), pattern= "SampleSheet", full.names = TRUE)
-runParameters <- list.files(paste0("data/", runs), pattern= "runParameters.xml", full.names = TRUE)
+runParameters <- list.files(paste0("data/", runs), pattern= "[Rr]unParameters.xml", full.names = TRUE)
 
 # Create samplesheet containing samples and run parameters for all runs
 samdf <- create_samplesheet(SampleSheet = SampleSheet, runParameters = runParameters, template = "V4") %>%
@@ -225,6 +227,8 @@ if (length(setdiff(samdf$sample_id, fastqFs)) > 0) {
                  " is missing, dropping from samplesheet \n")) 
   samdf <- samdf %>%
     filter(!sample_id %in% setdiff(samdf$sample_id, fastqFs))
+  logdf <- logdf %>%
+    filter(!sample_id %in% setdiff(logdf$sample_id, fastqFs))
 }
 
 #Write out updated sample CSV for use
@@ -378,18 +382,26 @@ for (i in 1:length(runs)){
   }
 ```
 
-# Trim Primers
+# Trim Primers {.tabset}
 
 DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm. 
 For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files. the seqateurs R package contains a wrapper fucntion to call bbduk from R to trim primers.
 
-```{r primer trimming , message=FALSE}
+If multiple primers have been multiplexed per library, use the multiplexed primer option below, otherwise proceed with the regular single primer workflow.
+
+## Single primer
+
+This workflow is for a single primer-pair per library. For this workflow to run, the pcr_primers, for_primer_seq and rev_primer_seq fields in the sample sheet must contain the primer information.
+
+```{r single primer trimming , message=FALSE}
 #Load sample sheet
 samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
+logdf <- read_csv("output/logs/logdf.csv")
 runs <- unique(samdf$fcid)
 
 #Create lists to track reads
 trimmed <- vector("list", length = length(runs))
+demux <- vector("list", length = length(runs))
 
 #Check primers are present
 if(any(is.na(samdf$for_primer_seq), is.na(samdf$rev_primer_seq))){warning("Some primer sequences are missing from samdf, check manually")}
@@ -397,35 +409,53 @@ if(any(is.na(samdf$for_primer_seq), is.na(samdf$rev_primer_seq))){warning("Some 
 i=1
 for (i in 1:length(runs)){
   path <- paste0("data/", runs[i])
-  qc.dir <- paste0("output/logs/", runs[i],"/" )
+  qc.dir <- paste0("output/logs/", runs[i])
 
   run_data <- samdf %>%
     dplyr::filter(fcid == runs[i])
   
   #Get primer sequences
   primers <- na.omit(c(unique(run_data$for_primer_seq), unique(run_data$rev_primer_seq)))
+  
+  # check if any samples need a second round of demultiplexing
+  twintagged <- any(str_detect(primers, ";"))
+  if (twintagged == TRUE) stop("Multiple primers are listed per sample in the sample data sheet, use the multi-primer workflow instead")
 
   fastqFs <- sort(list.files(paste0(path), pattern="_R1_", full.names = TRUE))
   fastqRs <- sort(list.files(paste0(path), pattern="_R2_", full.names = TRUE))
   if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",runs[i]," do not match."))
+    
+  # If there is multiple primer combination per run, do each seperately
+  primer_runs <- unique(run_data$pcr_primers)
+  
+  for (p in 1:length(primer_runs)){
+    primer_data <- run_data %>% dplyr::filter(pcr_primers == primer_runs[p])
+    
+    Fprimers <- unlist(str_split(unique(primer_data$for_primer_seq), ";"))
+    Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
 
-  trimmed[[i]] <- bbtrim(install="bin/bbmap", fwd = fastqFs, rev = fastqRs,
-                primers = primers, checkpairs=TRUE,
-                degenerate = TRUE, out.dir="01_trimmed", trim.end = "left",
-                kmer=NULL, tpe=TRUE, tbo=TRUE,
-                ordered = TRUE, mink = FALSE, hdist = 2,
-                maxlength =(max(run_data$for_read_length, run_data$rev_read_length) - sort(nchar(primers), decreasing = FALSE)[1]) +5,
-                force = TRUE, quality = FALSE, quiet=FALSE)
-
+    trimmed[[i]] <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+        bbtrim2(install="bin/bbmap", fwd = x, rev = y,
+              primers = c(Fprimers, Rprimers), checkpairs = FALSE,
+              degenerate = TRUE, out.dir=file.path(path, "01_trimmed"), trim.end = "left", 
+              kmer=NULL, tpe=TRUE, tbo=TRUE,
+              ordered = TRUE, mink = FALSE, hdist = 2,
+              maxlength =(max(run_data$for_read_length,
+                              run_data$rev_read_length) - sort(nchar(c(Fprimers, Rprimers)),
+                              decreasing = FALSE)[1]) +5, 
+              force = TRUE, quiet=FALSE)
+      })
+  }
+  
   # Check sequence lengths
   pre_trim <- plot_lengths(dir=path, aggregate=TRUE, sample=1e5) + 
     labs(title = runs[i], subtitle = "Pre-trimming")
   post_trim <- plot_lengths(dir=paste0(path, "/01_trimmed/"), aggregate=TRUE, sample=1e5)+ 
     labs(title = runs[i], subtitle = "Post-trimming")
 
-  pdf(file=paste(qc.dir, "/readlengths.pdf", sep=""), width = 11, height = 8 , paper="a4r")
-  plot(pre_trim)
-  plot(post_trim)
+  pdf(file=file.path(qc.dir, "readlengths.pdf"), width = 11, height = 8 , paper="a4r")
+    plot(pre_trim)
+    plot(post_trim)
   try(dev.off(), silent=TRUE)
   
   trim_summary <- trimmed[[i]] %>% 
@@ -445,8 +475,208 @@ for (i in 1:length(runs)){
   }
 }
 
-#Update log DF
+# Track reads
+logdf <- logdf %>% 
+  left_join(
+    trimmed %>%
+    purrr::set_names(runs) %>%
+    bind_rows(.id="fcid") %>%
+    mutate(sample_id = str_replace(basename(sample), pattern="_S.*$", replacement=""),
+           reads_demulti = input_reads/2,
+           reads_trimmed = output_reads/2) %>%
+    dplyr::select(fcid, sample_id, reads_demulti, reads_trimmed),
+  by=c("sample_id", "fcid"))
+
+write_csv(logdf, "output/logs/logdf.csv")
+```
+
+
+## Multiplexed primers
+
+This workflow is for multiple primer-pairs per library. These could either be targetting different gene regions, taxa, or be twin-tagged replicate primers.
+
+For the multiplexed workflow to run, the pcr_primers, for_primer_seq and rev_primer_seq fields in the sample sheet must contain all primers separated by a semicolon ';' For example:
+
+pcr_primers
+Sterno18SF2-Sterno18SR2;Sterno12SF2-Sterno12SR2;SternoCOIF1-SternoCOIR1
+
+for_primer_seq
+ATGCATGTCTCAGTGCAAG;CAYCTTGACYTAACAT;ATTGGWGGWTTYGGAAAYTG
+
+rev_primer_seq
+TCGACAGTTGATAAGGCAGAC;TAAAYYAGGATTAGATACCC;TATRAARTTRATWGCTCCTA
+
+
+```{r multiplexed primer trimming , message=FALSE}
+#Load sample sheet
+samdf <- read.csv("sample_data/Sample_info.csv", stringsAsFactors = FALSE)
 logdf <- read_csv("output/logs/logdf.csv")
+runs <- unique(samdf$fcid)
+
+#Create lists to track reads
+trimmed <- vector("list", length = length(runs))
+demux <- vector("list", length = length(runs))
+
+#Check primers are present
+if(any(is.na(samdf$for_primer_seq), is.na(samdf$rev_primer_seq))){warning("Some primer sequences are missing from samdf, check manually")}
+
+# check if any samples need a second round of demultiplexing
+i=1
+for (i in 1:length(runs)){
+  path <- paste0("data/", runs[i])
+  qc.dir <- paste0("output/logs/", runs[i])
+
+  run_data <- samdf %>%
+    dplyr::filter(fcid == runs[i])
+  
+  #Get primer sequences
+  primers <- na.omit(c(unique(run_data$for_primer_seq), unique(run_data$rev_primer_seq)))
+
+  #Check if samples were twin tagged - these require extra round of demultiplexing
+  twintagged <- any(str_detect(primers, ";"))
+  if (twintagged == TRUE) {
+      # Create output directory
+      demuxpath <- file.path(path, "00_demux")
+      dir.create(demuxpath)
+
+      # If there is multiple primer combination per run, do each seperately
+      primer_runs <- unique(run_data$pcr_primers)
+      for (p in 1:length(primer_runs)){
+        primer_data <- run_data %>% dplyr::filter(pcr_primers == primer_runs[p])
+        
+        Fprimers <- unlist(str_split(unique(primer_data$for_primer_seq), ";"))
+        Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
+        primer_names <- unlist(str_split(unique(primer_data$pcr_primers), ";"))
+        
+        # Demultiplex reads
+        fastqFs <- sort(list.files(path, pattern="*R1_001.*", full.names = TRUE))
+        fastqRs <- sort(list.files(path, pattern="*R2_001.*", full.names = TRUE))
+        demux <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+          bbdemux2(install="bin/bbmap", fwd=x, rev=y, Fbarcodes = Fprimers, 
+                      Rbarcodes = Rprimers, names=primer_names, degenerate=TRUE, out.dir=demuxpath,
+                      threads=1 , mem=4,  hdist=0, force=TRUE)
+        })
+        
+        # Rename output files to match imappests format
+        old_names <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE)) 
+        new_names <- old_names %>%
+          basename() %>%
+          str_remove(".fastq.gz") %>%
+          str_split("_", n=Inf) %>%
+          purrr::map_chr(function(x){
+            paste0(paste0(c(x[1:3], x[length(x)], x[4:(length(x)-1)]), collapse = "_"),".fastq.gz")
+          }) 
+        file.remove(file.path(dirname(old_names), new_names))
+        file.rename(old_names, file.path(dirname(old_names), new_names))
+
+        # Trim primers from demultiplexed fastq
+        demux_fastqs <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE))
+        trimmed[[i]] <- purrr::map_dfr(demux_fastqs, function(x){
+          bbtrim2(install="bin/bbmap", fwd = x,
+                primers = c(Fprimers, Rprimers), checkpairs = FALSE,
+                degenerate = TRUE, out.dir=file.path(path, "01_trimmed"), trim.end = "left", 
+                kmer=NULL, tpe=TRUE, tbo=TRUE,
+                ordered = TRUE, mink = FALSE, hdist = 2,
+                maxlength =(max(run_data$for_read_length, run_data$rev_read_length) - sort(nchar(c(Fprimers, Rprimers)), decreasing = FALSE)[1]) +5, force = TRUE, quiet=FALSE)
+        })
+        
+        # Re-split interleaved fastq's
+        trimmedpath <- file.path(path, "01_trimmed") 
+        trimmed_fastqs <- sort(list.files(trimmedpath, pattern="_R1R2_", full.names = TRUE))
+        purrr::walk(trimmed_fastqs, function(x){
+          bbsplit2(install="bin/bbmap", file=x, force=TRUE)
+        })
+        }
+    } else if (twintagged == FALSE) {
+      
+      fastqFs <- sort(list.files(paste0(path), pattern="_R1_", full.names = TRUE))
+      fastqRs <- sort(list.files(paste0(path), pattern="_R2_", full.names = TRUE))
+      if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",runs[i]," do not match."))
+    
+      # If there is multiple primer combination per run, do each seperately
+      primer_runs <- unique(run_data$pcr_primers)
+      
+      for (p in 1:length(primer_runs)){
+        primer_data <- run_data %>% dplyr::filter(pcr_primers == primer_runs[p])
+        
+        Fprimers <- unlist(str_split(unique(primer_data$for_primer_seq), ";"))
+        Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
+
+        trimmed[[i]] <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+            bbtrim2(install="bin/bbmap", fwd = x, rev = y,
+                  primers = c(Fprimers, Rprimers), checkpairs = FALSE,
+                  degenerate = TRUE, out.dir=file.path(path, "01_trimmed"), trim.end = "left", 
+                  kmer=NULL, tpe=TRUE, tbo=TRUE,
+                  ordered = TRUE, mink = FALSE, hdist = 2,
+                  maxlength =(max(run_data$for_read_length, run_data$rev_read_length) - sort(nchar(c(Fprimers, Rprimers)), decreasing = FALSE)[1]) +5, force = TRUE, quiet=FALSE)
+          })
+      }
+  }
+  
+  # Check sequence lengths
+  pre_trim <- plot_lengths(dir=path, aggregate=TRUE, sample=1e5) + 
+    labs(title = runs[i], subtitle = "Pre-trimming")
+  post_trim <- plot_lengths(dir=paste0(path, "/01_trimmed/"), aggregate=TRUE, sample=1e5)+ 
+    labs(title = runs[i], subtitle = "Post-trimming")
+
+  pdf(file=file.path(qc.dir, "readlengths.pdf"), width = 11, height = 8 , paper="a4r")
+    plot(pre_trim)
+    plot(post_trim)
+  try(dev.off(), silent=TRUE)
+  
+  trim_summary <- trimmed[[i]] %>% 
+    mutate(perc_reads_remaining = signif(((output_reads / input_reads) * 100), 2),
+           perc_bases_remaining = signif(((output_bases / input_bases) * 100), 2)
+           ) %>%
+    filter(!is.na(perc_reads_remaining))
+    
+  message(paste0(signif(mean(trim_summary$perc_reads_remaining, na.rm = TRUE), 2),
+                 "% of reads and ",
+                 signif(mean(trim_summary$perc_bases_remaining, na.rm = TRUE), 2),
+                 "% of bases remaining for ", runs[i]," after trimming"))
+  
+  # Print warning for each sample
+  for(w in 1:nrow(trim_summary)){
+    if (trim_summary[w,]$perc_reads_remaining < 10) {message(paste0("WARNING: Less than 10% bases remaining for ",trim_summary[w,]$sample), "Check primers are correct")}
+  }
+}
+
+#Update the sample sheet and logging sheet to deal with any newly demultiplexed files
+demultiplexed_samples <- samdf %>%
+  dplyr::select(sample_id, pcr_primers)
+
+samdf <- samdf %>%
+ group_by(sample_id) %>%
+ group_split() %>%
+ purrr::map(function(x){
+   if(any(str_detect(x$pcr_primers, ";"))){
+   x %>% 
+     mutate(count = length(primer_names)) %>% #Replicate the samples
+     uncount(count) %>%
+     mutate(pcr_primers = unlist(str_split(unique(x$pcr_primers), ";")),
+            for_primer_seq = unlist(str_split(unique(x$for_primer_seq), ";")),
+            rev_primer_seq = unlist(str_split(unique(x$rev_primer_seq), ";")),
+            sample_id = paste0(sample_id, "_",pcr_primers)
+            ) 
+   } else (x)
+ }) %>%
+  bind_rows()
+
+logdf <- logdf %>%
+ left_join(demultiplexed_samples) %>%
+ group_by(sample_id) %>%
+ group_split() %>%
+ purrr::map(function(x){
+   if(any(str_detect(x$pcr_primers, ";"))){
+   x %>% 
+     mutate(count = length(primer_names)) %>% #Replicate the samples
+     uncount(count) %>%
+     mutate(pcr_primers = unlist(str_split(unique(x$pcr_primers), ";")),
+            sample_id = paste0(sample_id, "_",pcr_primers)
+            ) 
+   } else (x)
+ }) %>%
+  bind_rows()
 
 # Track reads
 logdf <- logdf %>% 
@@ -463,7 +693,7 @@ logdf <- logdf %>%
 write_csv(logdf, "output/logs/logdf.csv")
 ```
 
-# Plot read quality & lengths
+# Plot read quality & lengths {-}
 
 ```{r QA plot, eval = FALSE, cache= TRUE}
 #Load sample sheet
