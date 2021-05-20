@@ -1229,7 +1229,7 @@ magrittr::set_rownames(getSequences(seqtab_final)) %T>%
 seqs <-  insect::char2dna(colnames(seqtab_final))
 names(seqs) <- colnames(seqtab_final) 
 
-blast_spp <- blast_assign_species(query=seqs,db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=97, coverage=95, evalue=1e06, maxtargetseqs=5, maxhsp=5, ranks=ranks, delim=";") %>%
+blast_spp <- blast_assign_species(query=seqs,db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=97, coverage=95, evalue=1e06, max_target_seqs=5, max_hsp=5, ranks=ranks, delim=";") %>%
   dplyr::rename(blast_genus = Genus, blast_spp = Species) %>%
   dplyr::filter(!is.na(blast_spp))
 
