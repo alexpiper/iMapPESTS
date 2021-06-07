@@ -148,9 +148,10 @@ if(any(!.inst)) {
   BiocManager::install(.bioc_packages[!.inst], ask = F)
 }
 
-#Load all packages
+#Load all published packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
+# Install and load github packages
 devtools::install_github("alexpiper/seqateurs", dependencies = TRUE)
 library(seqateurs)
 
@@ -161,10 +162,13 @@ devtools::install_github("mikemc/speedyseq", dependencies = TRUE)
 library(speedyseq)
 
 #Install bbmap
-seqateurs::bbmap_install(dest.dir = "bin")
+seqateurs::bbmap_install(dest_dir = "bin")
 
 #Install fastqc
-seqateurs::fastqc_install(dest.dir = "bin")
+seqateurs::fastqc_install(dest_dir = "bin")
+
+#Install BLAST
+taxreturn::blast_install(dest_dir = "bin")
 
 # Create directories
 if(!dir.exists("data")){dir.create("data", recursive = TRUE)}
