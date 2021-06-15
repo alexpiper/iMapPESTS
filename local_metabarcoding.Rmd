@@ -122,7 +122,8 @@ This pipeline requires various R packages to be installed prior to running. Thes
   "patchwork",
   "stringi",
   "phangorn",
-  "magrittr"
+  "magrittr",
+  "galah"
   )
 
 .bioc_packages <- c(
@@ -157,6 +158,9 @@ library(seqateurs)
 
 devtools::install_github("alexpiper/taxreturn", dependencies = TRUE)
 library(taxreturn)
+
+devtools::install_github("alexpiper/afdscraper", dependencies = TRUE)
+library(afdscraper)
 
 devtools::install_github("mikemc/speedyseq", dependencies = TRUE)
 library(speedyseq)
@@ -1581,6 +1585,9 @@ seqateurs::ps_to_fasta(ps1, "output/results/filtered/asvs_filtered.fasta", seqna
 
 #Output newick tree
 write.tree(phy_tree(ps1), file="output/results/filtered/tree_filtered.nwk")
+
+# output filtered phyloseq object
+saveRDS(ps1, "output/rds/ps_filtered.rds") 
 ```
 
 
@@ -1629,6 +1636,51 @@ speedyseq::psmelt(ps1) %>%
   write_csv("output/results/filtered/combined.csv")
 ```
 
+
+# Check presence of taxa in Australia
+
+Finally we will conduct an automated search against the Australian Faunal Directory and the Atlast of Living Australia to see if these species have been recorded in Australia before
+
+```{r distribution check}
+ps1 <- readRDS("output/rds/ps_filtered.rds")
+
+# First we need to set some data quality filters for ALA
+# To view available filters, run: find_field_values("basis_of_record")
+ala_quality_filter <- select_filters(
+      basisOfRecord = c("HumanObservation", "PreservedSpecimen", "LivingSpecimen",
+                      "MaterialSample", "NomenclaturalChecklist", "FossilSpecimen"))
+
+afd_ala_check <- ps1 %>%
+  speedyseq::psmelt() %>%
+  group_by(Species)%>%
+  summarise(metabarcoding_reads = sum(Abundance)) %>%
+  filter(!str_detect(Species, "__")) %>%
+  mutate(Species = Species %>% str_replace_all("_", " ")) %>%
+  mutate(AFD_present = purrr::map(Species, function(x){
+    !is.null(check_afd_name(x))
+    }),
+    AFD_distribution = purrr::map(Species, function(x){
+    paste(sort(get_afd_occurance(x)), collapse=", ")
+    }),
+    ALA_present = purrr::map(Species, function(x){
+    # first check name
+    query <- select_taxa(x) %>% 
+      filter(across(any_of("match_type"), ~!.x == "higherMatch"))
+    # Then get occurance counts
+    if(!is.null(query$scientific_name)){
+      ala_occur <- ala_counts(taxa=query, filters=ala_quality_filter)
+      return(data.frame(ALA_present = ifelse(ala_occur > 0, TRUE, FALSE), ALA_counts = ala_occur))
+    } else {
+      return(data.frame(ALA_present = FALSE, ALA_counts = 0))
+    }
+    })) %>%
+  unnest(AFD_present, AFD_distribution) %>%
+  mutate(AFD_distribution = na_if(AFD_distribution, "")) %>%
+  unnest_wider(ALA_present)
+
+write_csv(afd_ala_check, "output/results/final/afd_ala_check.csv")
+
+```
 
 # Output fate of reads through pipeline
 
