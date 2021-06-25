@@ -10,6 +10,7 @@ The main workflow can be followed up with the following comparisons depending on
 * [Diversity analyses](https://alexpiper.github.io/iMapPESTS/diversity.html)
 
 Before starting, i recommend learning about the individual componenets of the workflow:
+* [The indexing system we use](https://alexpiper.github.io/iMapPESTS/indexing.html)
 * [The DADA2 algorithm](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4927377/)
 * [The benefits of amplicon sequence variants over OTU's](https://www.nature.com/articles/ismej2017119)
 * [Taxonomic assignment using IDTAXA](https://microbiomejournal.biomedcentral.com/articles/10.1186/s40168-018-0521-5)
