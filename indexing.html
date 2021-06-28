@@ -25,12 +25,7 @@ s7 {color:#fc9272;}
 p5 {color:#08519c;}
 p7 {color:#a50f15;}
 me {color:#969696;}
-tso {color:#2ca25f;}
-cbc {color:#f768a1;}
-umi {color:#807dba;}
 t7 {color:blue;}
-pe1 {color:#bcbddc;}
-pe2 {color:#9ebcda;}
 w1 {color:#f03b20;}
 pri {color:#75c37c;}
 i71 {color:#a6cee3;}
@@ -54,14 +49,14 @@ h3 {font-family:verdana;}
 
 <h1>Illumina sequencing libraries</h1>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Illumina sequencing by synthesis (SBS) first requires addition of oligonucleotide adapters to purified DNA. These adapters contain three main components: (1) the P5 and P7 sequences which bind the libraries to the flow cell for sequencing. These sequences are complementary to "solid support" oligos which are spread like a lawn across the flow cell. (2) the i5 and i7 index sequences (barcodes) used to uniquely label each sample, and (3) the binding site for the Read 1 and Read 2sequencing primers. There are many different adaptor designs that are used for Illumina sequencing, with the following two being the most popular ones:</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Illumina sequencing by synthesis (SBS) first requires annealing of oligonucleotide adapters to purified target DNA. These adapters consist of three main components: (1) the P5 and P7 sequences that allow the library to bind and generate clusters on the flow cell. These sequences are complementary to "solid support" oligos which are spread like a lawn across the flow cell. (2) the i5 and i7 index sequences (barcodes) which are sample identifiers that allow multiplexing/pooling of multiple samples in a single sequencing run or flow cell lane.(3) The Read 1 and Read Sequencing primer binding sites to initiate sequencing. There are a variety of different Illumina and third party adapter designs that can be used for Illumina sequencing, with the following two being the most popular:</span></p>
 
-<h3>Truseq Dual Index Library:</h3>
+<h3>TruSeq Dual Index Library:</h3>
 <pre>
 <seq>
 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>-insert-<s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
 3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5>-insert-<s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
-          <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>Truseq Read 1</s5>                          <s7>Truseq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
+          <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>TruSeq Read 1</s5>                          <s7>TruSeq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
 </seq>
 </pre>
 
@@ -74,9 +69,9 @@ h3 {font-family:verdana;}
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">the "insert" is the molecules to be sequenced, in the case of metabarcoding libraries this includes the target locus, as well as the locus-specific forward and reverse primers.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">the "insert" is the commonly used term for the target molecules to be sequenced, in the case of metabarcoding libraries this includes the barcode locus, as well as the forward and reverse PCR primers used to amplify that locus.</span></p>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The "N"s indicate the indexes, or barcodes that discriminate different samples. These are short 8-10bp sequences (i.e. CTATGTTA) that are unique to each sample. The index at the right hand side is called "i7", or index1 and the index at the left hand side is called "i5", or index2.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The "N"s in the above diagrams indicate the "indexes", or "barcodes" used to discriminate different samples. These are short 8-10bp sequences (i.e. CTATGTTA) that are unique to each sample. The index at the right hand side is the "i7 index", or "index1", while the index at the left hand side is the "i5 index", or "index2".</span></p>
 
 <p><span style="font-family:verdana; font-size:1.1em;">Dual indexed libraries can either be combinatiorial, where only 1 index is different between samples, while the other is shared:</span></p>
 <pre>
@@ -102,23 +97,23 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">We use unique dual indexing as it considerably reduces the amount of cross contamination caused by index-switching.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Illumina encourages customers to use unique dual indexing (UDI) whenever possible to ensure the most accurate demultiplexing, and therefore reduce the risk of sample cross-contamination.</span></p>
 
 <h1>Library preparation:</h1>
 
-<p><span style="font-family:verdana; font-size:1.1em;">In our current metabarcoding protocol, we use the TruSeq adapter system and add them to the molecule in 2 sepearate PCRs:</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">In our current metabarcoding protocol, we are using the TruSeq adapter system and anneal them to the molecule using 2 separate PCRs:</span></p>
 
 <h3>First PCR:</h3>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target locus (COI) and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specifc primers to include the Universal 5' adapters as tails. Below we are using the fwhF2-fwhR2n primer sets as an example: </span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target locus (COI) and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specific primers to include the Universal 5' adapters as tails. Below we are using the fwhF2-fwhR2n primer sets as an example: </span></p>
 
 <p><span style="font-family:verdana; font-size:1.1em;"></span></p>
 <pre>
 <seq>
 <p>Tailed F primer: 5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>-<pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri> -3'
-                                <s5>Truseq Read 1</s5>                    <pri>Forward primer</pri> 
+                                <s5>TruSeq Read 1</s5>                    <pri>Forward primer</pri> 
 <p>Tailed R primer 5'- <s7>GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT</s7>-<pri>GTRATWGCHCCDGCTARWACWGG</pri> -3'
-                                <s7>Truseq Read 1</s7>                    <pri>Reverse primer</pri> 
+                                <s7>TruSeq Read 1</s7>                    <pri>Reverse primer</pri> 
 </seq>
 </pre>
 
@@ -127,21 +122,21 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 <seq>
 5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-target locus-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7> -3'
 5'- <s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-target locus-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7> -3'
-            <s5>Truseq Read 1</s5>                <pri>Forward primer</pri>                          <pri>Reverse primer</pri>               <s7>Truseq Read 2</s7>
+            <s5>TruSeq Read 1</s5>                <pri>Forward primer</pri>                          <pri>Reverse primer</pri>               <s7>TruSeq Read 2</s7>
 </seq>
 </pre>
 
 <br></br>
 
 <h3>Second PCR:</h3>
-<p><span style="font-family:verdana; font-size:1.1em;">The second PCR uses the Read 1 and Read 2 primer sequences as templates to add the P5 and P7 sequencing primers, as well as i5 and i7 indexes. The second set of primers, commonly refered to as indexing primers, are normally purchased in a kit or designed in house. Either way, they are generally structured like this: </span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The second PCR uses the Read 1 and Read 2 primer sequences as templates to add the P5 and P7 sequencing primers, as well as i5 and i7 indexes. The second set of primers, commonly referred to as indexing primers, are normally purchased in a kit or designed in house. Either way, they are generally structured like this: </span></p>
 
 <pre>
 <seq>
 <p>iTru_R1_5: 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5> -3'
-                        <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>Truseq Read 1</s5>
+                        <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>TruSeq Read 1</s5>
 <p>iTru_R2_5 5'- <s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
-                        <s7>Truseq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
+                        <s7>TruSeq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
 </seq>
 </pre>
 
@@ -151,23 +146,23 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 <seq>
 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-target locus-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
 3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-target locus-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
-          <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>Truseq Read 1</s5>               <pri>Forward primer</pri>                         <pri>Reverse primer</pri>             <s7>Truseq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
+          <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>TruSeq Read 1</s5>               <pri>Forward primer</pri>                         <pri>Reverse primer</pri>             <s7>TruSeq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Once the adaptors are added the libraries are ready to be sequenced.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Once the adapters are added the libraries are ready to be sequenced.</span></p>
 
 <h1>Sequencing:</h1>
 
 <p><span style="font-family:verdana; font-size:1.1em;">The below steps are automatically performed by the machine and sequencing chemistry, and do not need to be performed by the operator. From here on the target locus, forward, and reverse primers will be referred to as the "Insert".</span></p>
 
-<p><span style="font-family:verdana; font-size:1.1em;">In the sequencing reagents provided by Illumina, the seuqencing primers are actually a mixture of different primers, including Truseq, Nextera and even primers from obsolete kits. Therefore, you actually can sequence different types of libraries together.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">In the sequencing reagents provided by Illumina, the sequencing primers are actually a mixture of different primers, including TruSeq, Nextera and even primers from obsolete kits. Therefore, you actually can sequence different types of libraries together.</span></p>
 
 <h3>(Step 1) Add Read 1 sequencing primer mixture to sequence the first read (bottom strand as template):</h3>
 
 <pre>
 <seq>
-Truseq Dual Index Library:
+TruSeq Dual Index Library:
 
                                      5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>---->
 3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5>-insert-<s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
@@ -187,7 +182,7 @@ Nextera Dual Index Library:
 
 <pre>
 <seq>
-Truseq Dual Index Library:
+TruSeq Dual Index Library:
 
                                                                               5'- <s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7>------->
 3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5>-insert-<s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
@@ -203,11 +198,11 @@ Nextera Dual Index Library:
 </seq>
 </pre>
 
-<h3>(Step 3 of Miseq, Hiseq2000/2500 and NovaSeq 6000) Folds over and sequence the second index (index 2, i5, bottom strand as template):</h3>
+<h3>(Step 3 of MiSeq, HiSeq2000/2500 and NovaSeq 6000) Folds over and sequence the second index (index 2, i5, bottom strand as template):</h3>
 
 <pre>
 <seq>
-Truseq Dual Index Library:
+TruSeq Dual Index Library:
 
 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5>------->
 3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5>-insert-<s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
@@ -227,7 +222,7 @@ Nextera Dual Index Library:
 
 <pre>
 <seq>
-Truseq Dual Index Library:
+TruSeq Dual Index Library:
 
 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>-insert-<s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
                                  <-------<s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5> -5'
@@ -247,7 +242,7 @@ Nextera Dual Index Library:
 
 <pre>
 <seq>
-Truseq Dual Index Library:
+TruSeq Dual Index Library:
 
 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>-insert-<s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
                                                                            <------<s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7> -5'
