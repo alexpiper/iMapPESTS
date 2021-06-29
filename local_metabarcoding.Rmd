@@ -8,6 +8,7 @@ output:
     highlighter: null
     theme: "flatly"
     code_download: true
+    code_folding: show
     toc: true
     toc_float: 
       collapsed: false
@@ -85,23 +86,23 @@ done
 
 ```
 
-The directory structure should now look something like this:
+# Optional: Run R on BASC
+You may wish to run this workflow through the BASC command line in order to take advantage of more processing power. To do this, you can start a new SLURM interactive session. Press the CODE button to the lower right to display the code for this optional step.
 
-    root/
-    ├── data/
-    │   ├── CJL7D/
-    │   │  ├── R1.fastq.gz
-    │   │  ├── R2.fastq.gz
-    │   │  ├── runInfo.xml
-    │   │  ├── runParameters.xml
-    │   │  ├── SampleSheet.csv
-    │   │  └── InterOp/
-    │   └── fcid2/
-    ├── sample_data/
-    ├── output/
-    └── doc/
+```{bash, class.source = 'fold-hide'}
+# Create new interactive SLURM session
+sinteractive --ntasks=1 --cpus-per-task=10 --mem-per-cpu=10GB --time=72:00:00
 
-If you don't have the sample_data, output and doc folders yet they will be made in the next step
+module load R/4.0.0-foss-2020a
+module load GDAL/3.0.2-foss-2019a-Python-3.7.2
+module load BLAST+/2.11.0-gompi-2020a
+
+# Load R
+R
+
+# Run quit() to quit R once you are finished
+```
+
 
 # Install packages and setup directories
 
@@ -165,14 +166,20 @@ library(afdscraper)
 devtools::install_github("mikemc/speedyseq", dependencies = TRUE)
 library(speedyseq)
 
-#Install bbmap
-seqateurs::bbmap_install(dest_dir = "bin")
+#Install bbmap if its not in $path or in bin folder
+if(Sys.which("bbduk")=="" & !file.exists("bin/bbmap/bbduk.sh")){
+  seqateurs::bbmap_install(dest_dir = "bin")
+}
 
-#Install fastqc
-seqateurs::fastqc_install(dest_dir = "bin")
+#Install fastqc if its not in $path or in bin folder
+if(Sys.which("fastqc")=="" & !file.exists("bin/FastQC/fastqc")){
+  seqateurs::fastqc_install(dest_dir = "bin")
+}
 
-#Install BLAST
-taxreturn::blast_install(dest_dir = "bin")
+#Install BLAST if its not in $path or in bin folder
+if(.findExecutable("blastn")=="" & (length(fs::dir_ls("bin", glob="*blastn.exe",recurse = TRUE)) ==0)){
+  taxreturn::blast_install(dest_dir = "bin")
+}
 
 # Create directories
 if(!dir.exists("data")){dir.create("data", recursive = TRUE)}
@@ -185,6 +192,26 @@ if(!dir.exists("output/results/final")) {dir.create("output/results/final", recu
 if(!dir.exists("output/results/unfiltered")) {dir.create("output/results/unfiltered", recursive = TRUE)}
 if(!dir.exists("output/results/filtered")) {dir.create("output/results/filtered", recursive = TRUE)}
 ```
+
+The directory structure should now look something like this:
+
+    root/
+    ├── data/
+    │   ├── CJL7D/
+    │   │  ├── R1.fastq.gz
+    │   │  ├── R2.fastq.gz
+    │   │  ├── runInfo.xml
+    │   │  ├── runParameters.xml
+    │   │  ├── SampleSheet.csv
+    │   │  └── InterOp/
+    │   └── fcid2/
+    ├── sample_data/
+    ├── reference
+    ├── bin
+    ├── output/
+    └── doc/
+
+The reference and bin folders can be copied from previous runs. 
 
 ## Create sample sheet 
 
@@ -1364,7 +1391,7 @@ tax <- t(sapply(ids, function(x) {
 saveRDS(tax, "output/rds/tax.rds") 
 ```
 
-## RDP + Exact Matching
+## RDP + Exact Matching {-}
 
 Alternatively, the RDP classifier can be used to assign heirarchial taxonomy to the ASVs using the convenient assigntaxonomy wrapper function within DADA2
 
@@ -1385,11 +1412,11 @@ tax_plus <- na_to_unclassified(tax_plus)
 saveRDS(tax_plus, "output/rds/tax.rds") 
 ```
 
-# Optional - Top hit identity distribution {-}
+# Optional - Top hit identity distribution 
 
-This will produce a plot that summarises the taxonomy assigned to each ASV in comparison to the percentage identity between that ASV and the most similar sequence in the reference database. This provides a good summary of both how well the taxonomic assignment algorithm has performed, as well as how well the communities under study are represented within the reference database. 
+This is an optional step to produce a Top Hit Identity Distribution (THID) plot. This displays the taxonomy assigned to each ASV compared to its genetic distance from the most similar sequence in the reference database. This provides a good overview of how well the taxonomic assignment algorithm has performed, as well as the representation of the target taxa within the reference database. Press the CODE button to the lower right to display the code for this optional step.
 
-```{R top hit dist}
+```{R top hit dist, class.source = 'fold-hide'}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 tax <- readRDS("output/rds/tax.rds")
 
@@ -1637,11 +1664,14 @@ speedyseq::psmelt(ps1) %>%
 ```
 
 
-# Check presence of taxa in Australia
+# Optional - Check presence of taxa in Australia
 
-Finally we will conduct an automated search against the Australian Faunal Directory and the Atlast of Living Australia to see if these species have been recorded in Australia before
+This is an optional step to run an automated search against the Australian Faunal Directory and the Atlas of Living Australia to see if the the detected species have been recorded in Australia before.
 
-```{r distribution check}
+Press the CODE button to the lower right to display the code for this optional step.
+
+
+```{r distribution check, class.source = 'fold-hide'}
 ps1 <- readRDS("output/rds/ps_filtered.rds")
 
 # First we need to set some data quality filters for ALA
