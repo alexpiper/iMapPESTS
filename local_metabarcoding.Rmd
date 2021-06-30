@@ -26,9 +26,6 @@ knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE,error=FALSE, fig.sh
 opts_chunk$set(dev = 'png')
 ```
 
-# Introduction 
-
-
 # Demultiplex sequencing reads
 For this workflow to run, we need to first demultiplex the miseq run again as the miseq does not put indexes in fasta headers by default, and also obtain some necessary files from the sequencing folder. The below code is written for the Agriculture Victoria BASC server, and the locations will be different if you are using a different HPC cluster.
 
@@ -94,6 +91,7 @@ You may wish to run this workflow through the BASC command line in order to take
 sinteractive --ntasks=1 --cpus-per-task=10 --mem-per-cpu=10GB --time=72:00:00
 
 module load R/4.0.0-foss-2020a
+module load pkgconfig/1.5.1-GCCcore-9.3.0-Python-3.8.2
 module load GDAL/3.0.2-foss-2019a-Python-3.7.2
 module load BLAST+/2.11.0-gompi-2020a
 
@@ -104,11 +102,92 @@ R
 ```
 
 
-# Install packages and setup directories
+# Install and load R packages and setup directories {.tabset}
 
-This pipeline requires various R packages to be installed prior to running. These are obtained from CRAN, Bioconductor and Github. The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
+This pipeline depends on various R packages to be installed prior to running. There are now two ways of doing this, the recommended "Renv" option ensures that the exact same software versions are installed to what was used during development. The alternative "Manual" option represents the older default for this pipeline prior to June 2021 and can cause errors due to packages changing over time.
 
-```{r install & Load packages} 
+## Renv
+
+This approach downloads all required package versions to a local cache. This can take a while the first time you run it, and it may be best to restart afterwards
+
+The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
+
+```{r renv install} 
+# Download the renv lockfile, which keeps track of package versions
+rlock <- readLines("https://github.com/alexpiper/iMapPESTS/blob/master/renv.lock?raw=true")
+writeLines(rlock, "renv.lock")
+
+# Restore the renv to install package dependencies
+renv::restore(prompt = FALSE)
+
+# Packages to load
+.packages <- c(
+  "devtools",
+  "ggplot2",
+  "gridExtra",
+  "data.table",
+  "tidyverse", 
+  "stringdist",
+  "patchwork",
+  "vegan",
+  "seqinr",
+  "patchwork",
+  "stringi",
+  "phangorn",
+  "magrittr",
+  "galah",
+  "dada2",
+  "phyloseq",
+  "DECIPHER",
+  "Biostrings",
+  "ShortRead",
+  "ggtree",
+  "savR",
+  "ngsReports",
+  "seqateurs",
+  "taxreturn",
+  "afdscraper",
+  "speedyseq"
+  )
+
+# Load all packages
+sapply(.packages, require, character.only = TRUE)
+
+
+#Install bbmap if its not in $path or in bin folder
+if(Sys.which("bbduk")=="" & !file.exists("bin/bbmap/bbduk.sh")){
+  seqateurs::bbmap_install(dest_dir = "bin")
+}
+
+#Install fastqc if its not in $path or in bin folder
+if(Sys.which("fastqc")=="" & !file.exists("bin/FastQC/fastqc")){
+  seqateurs::fastqc_install(dest_dir = "bin")
+}
+
+#Install BLAST if its not in $path or in bin folder
+if(.findExecutable("blastn")=="" & (length(fs::dir_ls("bin", glob="*blastn.exe",recurse = TRUE)) ==0)){
+  taxreturn::blast_install(dest_dir = "bin")
+}
+
+# Create directories
+if(!dir.exists("data")){dir.create("data", recursive = TRUE)}
+if(!dir.exists("reference")){dir.create("reference", recursive = TRUE)}
+if(!dir.exists("output/logs")){dir.create("output/logs", recursive = TRUE)}
+if(!dir.exists("output/results")){dir.create("output/results", recursive = TRUE)}
+if(!dir.exists("output/rds")){dir.create("output/rds", recursive = TRUE)}
+if(!dir.exists("sample_data")){dir.create("sample_data", recursive = TRUE)}
+if(!dir.exists("output/results/final")) {dir.create("output/results/final", recursive = TRUE)}
+if(!dir.exists("output/results/unfiltered")) {dir.create("output/results/unfiltered", recursive = TRUE)}
+if(!dir.exists("output/results/filtered")) {dir.create("output/results/filtered", recursive = TRUE)}
+```
+
+## Manual {-}
+
+This approach manually obtains packages from CRAN, Bioconductor and Github. This method is no longer recomended.
+
+The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
+
+```{r Manual install, class.source="bg-warning"} 
 #Set required packages
 .cran_packages <- c(
   "devtools",
@@ -128,7 +207,6 @@ This pipeline requires various R packages to be installed prior to running. Thes
   )
 
 .bioc_packages <- c(
-  "dada2",
   "phyloseq",
   "DECIPHER",
   "Biostrings",
@@ -154,8 +232,12 @@ if(any(!.inst)) {
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
 # Install and load github packages
-devtools::install_github("alexpiper/seqateurs", dependencies = TRUE)
+devtools::install_github("alexpiper/seqateurs", dependencies = TRUE,
+  INSTALL_opts = c("--no-multiarch"))
 library(seqateurs)
+
+devtools::install_github("benjjneb/dada2", dependencies = TRUE,
+  INSTALL_opts = c("--no-multiarch"))
 
 devtools::install_github("alexpiper/taxreturn", dependencies = TRUE)
 library(taxreturn)
@@ -193,6 +275,8 @@ if(!dir.exists("output/results/unfiltered")) {dir.create("output/results/unfilte
 if(!dir.exists("output/results/filtered")) {dir.create("output/results/filtered", recursive = TRUE)}
 ```
 
+# Create sample sheet 
+
 The directory structure should now look something like this:
 
     root/
@@ -212,8 +296,6 @@ The directory structure should now look something like this:
     └── doc/
 
 The reference and bin folders can be copied from previous runs. 
-
-## Create sample sheet 
 
 In order to track samples and relevant QC statistics throughout the metabarcoding pipeline, we will first create a new samplesheet from our input samplesheets. This function requires both the SampleSheet.csv used for the sequencing run, and the runParameters.xml, both of which should have been automatically obtained from the demultiplexed sequencing run folder in the bash step above
 
@@ -426,7 +508,7 @@ for (i in 1:length(runs)){
 
 # Trim Primers {.tabset}
 
-DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplhowever primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm. 
+DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Following demultiplexing however primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm. 
 For this workflow we will be using the Kmer based adapter trimming software BBDuk (Part of BBTools package https://jgi.doe.gov/data-and-tools/bbtools/) to trim the primers from our raw data files. the seqateurs R package contains a wrapper fucntion to call bbduk from R to trim primers.
 
 If multiple primers have been multiplexed per library, use the multiplexed primer option below, otherwise proceed with the regular single primer workflow.
@@ -1395,7 +1477,7 @@ saveRDS(tax, "output/rds/tax.rds")
 
 Alternatively, the RDP classifier can be used to assign heirarchial taxonomy to the ASVs using the convenient assigntaxonomy wrapper function within DADA2
 
-```{r RDP classifier, class.source="bg-danger"}
+```{r RDP classifier, class.source="bg-warning"}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 
 # Assign Kingdom:Genus taxonomy using RDP classifier

@@ -696,9 +696,15 @@
     },
     "dada2": {
       "Package": "dada2",
-      "Version": "1.18.0",
-      "Source": "Bioconductor",
-      "Hash": "641a8135a8b0560175a7e5b71a2e7c66"
+      "Version": "1.19.2",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "dada2",
+      "RemoteUsername": "benjjneb",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "d30dd3f5932bc478a87028ac155969dcdbc936e7",
+      "Hash": "279deab21d8b1945ae085fad8eaadc27"
     },
     "data.table": {
       "Package": "data.table",
@@ -1921,8 +1927,8 @@
       "RemoteRepo": "seqateurs",
       "RemoteUsername": "alexpiper",
       "RemoteRef": "HEAD",
-      "RemoteSha": "beda0af205cc28e5e7af0f5b803a78617f99e1a2",
-      "Hash": "91705a1884abf4ac5e164b7369d7d801"
+      "RemoteSha": "d3c75bcce69fca1f3c15feafb4cb3383b66e090b",
+      "Hash": "a49a02feee686e1d29c38943b666e88c"
     },
     "seqinr": {
       "Package": "seqinr",
