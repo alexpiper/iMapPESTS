@@ -190,7 +190,7 @@ This approach manually obtains packages from CRAN, Bioconductor and Github. This
 
 The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
 
-```{r Manual install, class.source="bg-warning"} 
+```{r Manual install} 
 #Set required packages
 .cran_packages <- c(
   "devtools",
