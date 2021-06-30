@@ -104,7 +104,7 @@ R
 
 # Install and load R packages and setup directories {.tabset}
 
-This pipeline depends on various R packages to be installed prior to running. There are now two ways of doing this, the recommended "Renv" option ensures that the exact same software versions are installed to what was used during development. The alternative "Manual" option represents the older default for this pipeline prior to June 2021 and can cause errors due to packages changing over time.
+This pipeline depends on various R packages to be installed prior to running. There are now two ways of doing this, the recommended "Renv" option ensures that the exact same software versions are installed to what was used during development. The alternative "Manual" option represents the older default for this pipeline prior to June 2021 and may lead to errors due to packages changing over time.
 
 ## Renv
 
@@ -113,6 +113,9 @@ This approach downloads all required package versions to a local cache. This can
 The seqateurs R package also provides wrappers around other software packages for QC. For convenience we will download and install these software in a new folder called "bin"
 
 ```{r renv install} 
+install.packages("renv")
+library(renv)
+
 # Download the renv lockfile, which keeps track of package versions
 rlock <- readLines("https://github.com/alexpiper/iMapPESTS/blob/master/renv.lock?raw=true")
 writeLines(rlock, "renv.lock")
