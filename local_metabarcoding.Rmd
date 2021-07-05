@@ -1349,7 +1349,7 @@ magrittr::set_rownames(getSequences(seqtab_final)) %T>%
   magrittr::set_rownames(getSequences(seqtab_final)) 
 
 # Top hit with BLAST
-seqs <-  insect::char2dna(colnames(seqtab_final))
+seqs <- taxreturn::char2DNAbin(colnames(seqtab_final))
 names(seqs) <- colnames(seqtab_final) 
 
 blast_spp <- blast_assign_species(query=seqs,db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=97, coverage=95, evalue=1e06, max_target_seqs=5, max_hsp=5, ranks=ranks, delim=";") %>%
@@ -1501,7 +1501,7 @@ This is an optional step to produce a Top Hit Identity Distribution (THID) plot.
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 tax <- readRDS("output/rds/tax.rds")
 
-seqs <- insect::char2dna(colnames(seqtab_final))
+seqs <- taxreturn::char2DNAbin(colnames(seqtab_final))
 names(seqs) <- colnames(seqtab_final)
 
 out <- blast_top_hit(query=seqs, db="reference/insecta_hierarchial_bftrimmed.fa.gz", identity=60, coverage=80)
