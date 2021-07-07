@@ -76,24 +76,24 @@ h3 {font-family:verdana;}
 <p><span style="font-family:verdana; font-size:1.1em;">Dual indexed libraries can either be combinatiorial, where only 1 index is different between samples, while the other is shared:</span></p>
 <pre>
 <seq>
-sample1 - <i51>-AATAACGT</i51>...<i71>AATCGTTA</i71>
-sample2 - <i51>-TTCTTGAA</i51>...<i72>GTCTACAT</i72>
-sample3 - <i51>-GGCAGATC</i51>...<i73>CGCTGCTC</i73>
-sample4 - <i51>-CTATGTTA</i51>...<i74>GATCAACA</i74>
-sample5 - <i51>-GTTGACGC</i51>...<i75>CGAAGGAC</i75>
-              <t7>i5</t7>        <t7>i7</t7>
+Sample 1 - <i51>-AATAACGT</i51>...<i71>AATCGTTA</i71>
+Sample 2 - <i51>-TTCTTGAA</i51>...<i72>GTCTACAT</i72>
+Sample 3 - <i51>-GGCAGATC</i51>...<i73>CGCTGCTC</i73>
+Sample 4 - <i51>-CTATGTTA</i51>...<i74>GATCAACA</i74>
+Sample 5 - <i51>-GTTGACGC</i51>...<i75>CGAAGGAC</i75>
+               <t7>i5</t7>        <t7>i7</t7>
 </seq>
 </pre>
 
 <p><span style="font-family:verdana; font-size:1.1em;">Or completely unique (Unique Dual Indexing) where both the i5 and i7 index is completely unique to that sample:</span></p>
 <pre>
 <seq>
-sample1 - <i51>-AATAACGT</i51>...<i71>AATCGTTA</i71>
-sample2 - <i52>-TTCTTGAA</i52>...<i72>GTCTACAT</i72>
-sample3 - <i53>-GGCAGATC</i53>...<i73>CGCTGCTC</i73>
-sample4 - <i54>-CTATGTTA</i54>...<i74>GATCAACA</i74>
-sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
-              <t7>i5</t7>        <t7>i7</t7>
+Sample 1 - <i51>-AATAACGT</i51>...<i71>AATCGTTA</i71>
+Sample 2 - <i52>-TTCTTGAA</i52>...<i72>GTCTACAT</i72>
+Sample 3 - <i53>-GGCAGATC</i53>...<i73>CGCTGCTC</i73>
+Sample 4 - <i54>-CTATGTTA</i54>...<i74>GATCAACA</i74>
+Sample 5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
+               <t7>i5</t7>        <t7>i7</t7>
 </seq>
 </pre>
 
@@ -105,23 +105,23 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 
 <h3>First PCR:</h3>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target locus (COI) and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specific primers to include the Universal 5' adapters as tails. Below we are using the fwhF2-fwhR2n primer sets as an example: </span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target DNA (COI) and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specific primers to include the Universal 5' adapters as tails. Below we are using the fwhF2-fwhR2n primer sets as an example: </span></p>
 
 <p><span style="font-family:verdana; font-size:1.1em;"></span></p>
 <pre>
 <seq>
 <p>Tailed F primer: 5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5>-<pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri> -3'
                                 <s5>TruSeq Read 1</s5>                    <pri>Forward primer</pri> 
-<p>Tailed R primer 5'- <s7>GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT</s7>-<pri>GTRATWGCHCCDGCTARWACWGG</pri> -3'
-                                <s7>TruSeq Read 1</s7>                    <pri>Reverse primer</pri> 
+<p>Tailed R primer: 5'- <s7>GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCT</s7>-<pri>GTRATWGCHCCDGCTARWACWGG</pri> -3'
+                                <s7>TruSeq Read 2</s7>                    <pri>Reverse primer</pri> 
 </seq>
 </pre>
 
 <p><span style="font-family:verdana; font-size:1.1em;">Following amplification with these tailed primers, the molecules will look like this:</span></p>
 <pre>
 <seq>
-5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-target locus-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7> -3'
-5'- <s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-target locus-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7> -3'
+5'- <s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-Target-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7> -3'
+5'- <s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-Target-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7> -3'
             <s5>TruSeq Read 1</s5>                <pri>Forward primer</pri>                          <pri>Reverse primer</pri>               <s7>TruSeq Read 2</s7>
 </seq>
 </pre>
@@ -135,17 +135,17 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 <seq>
 <p>iTru_R1_5: 5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5> -3'
                         <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>TruSeq Read 1</s5>
-<p>iTru_R2_5 5'- <s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
+<p>iTru_R2_5: 5'- <s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
                         <s7>TruSeq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Following amplification with the second set of primers, the molecules will look like this:</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Following amplification with the second set of primers (indexing primers), the molecules will look like this:</span></p>
 
 <pre>
 <seq>
-5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-target locus-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
-3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-target locus-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
+5'- <p5>AATGATACGGCGACCACCGAGATCTACAC</p5><t7>NNNNNNNN</t7><s5>ACACTCTTTCCCTACACGACGCTCTTCCGATCT</s5><pri>GGDACWGGWTGAACWGTWTAYCCHCC</pri>-Target-<pri>CCWGTWYTAGCHGGDGCWATYAC</pri><s7>AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC</s7><t7>NNNNNNNN</t7><p7>ATCTCGTATGCCGTCTTCTGCTTG</p7> -3'
+3'- <p5>TTACTATGCCGCTGGTGGCTCTAGATGTG</p5><t7>NNNNNNNN</t7><s5>TGTGAGAAAGGGATGTGCTGCGAGAAGGCTAGA</s5><pri>CCHCCYATWTGWCAAGTWGGWCADGG</pri>-Target-<pri>GGWCAWRATCGDCCHCGWTARTG</pri><s7>TCTAGCCTTCTCGTGTGCAGACTTGAGGTCAGTG</s7><t7>NNNNNNNN</t7><p7>TAGAGCATACGGCAGAAGACGAAC</p7> -5'
           <p5>Illumina P5</p5>               <t7>i5</t7>            <s5>TruSeq Read 1</s5>               <pri>Forward primer</pri>                         <pri>Reverse primer</pri>             <s7>TruSeq Read 2</s7>                 <t7>i7</t7>        <p7>Illumina P7</p7>
 </seq>
 </pre>
@@ -154,7 +154,7 @@ sample5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 
 <h1>Sequencing:</h1>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The below steps are automatically performed by the machine and sequencing chemistry, and do not need to be performed by the operator. From here on the target locus, forward, and reverse primers will be referred to as the "Insert".</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The below steps are automatically performed by the machine and sequencing chemistry, and do not need to be performed by the operator. From here on the target DNA, forward, and reverse primers will be referred to as the "Insert".</span></p>
 
 <p><span style="font-family:verdana; font-size:1.1em;">In the sequencing reagents provided by Illumina, the sequencing primers are actually a mixture of different primers, including TruSeq, Nextera and even primers from obsolete kits. Therefore, you actually can sequence different types of libraries together.</span></p>
 
