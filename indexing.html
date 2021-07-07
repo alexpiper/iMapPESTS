@@ -49,7 +49,7 @@ h3 {font-family:verdana;}
 
 <h1>Illumina sequencing libraries</h1>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Illumina sequencing by synthesis (SBS) first requires annealing of oligonucleotide adapters to purified target DNA. These adapters consist of three main components: (1) the P5 and P7 sequences that allow the library to bind and generate clusters on the flow cell. These sequences are complementary to "solid support" oligos which are spread like a lawn across the flow cell. (2) the i5 and i7 index sequences (barcodes) which are sample identifiers that allow multiplexing/pooling of multiple samples in a single sequencing run or flow cell lane.(3) The Read 1 and Read Sequencing primer binding sites to initiate sequencing. There are a variety of different Illumina and third party adapter designs that can be used for Illumina sequencing, with the following two being the most popular:</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Illumina sequencing by synthesis requires special oligonucleotide adapters to be annealed to the purified target DNA in order to initiate sequencing. These adapters consist of three main components: (1) the P5 and P7 sequences that allow the library to bind and generate clusters on the flow cell. (2) The i5 and i7 index sequences (barcodes) which uniquely label the molecules from different samples to allow multiplexing/pooling of multiple samples in a single sequencing run or flow cell lane.(3) The binding sites for the Read 1 and Read 2 sequencing primers which initiate the sequencing process itself. There are a variety of Illumina and third party adapter designs that can be used for Illumina sequencing, with the TruSeq and Nextera adapter systems being the most popular:</span></p>
 
 <h3>TruSeq Dual Index Library:</h3>
 <pre>
@@ -69,11 +69,11 @@ h3 {font-family:verdana;}
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">the "insert" is the commonly used term for the target molecules to be sequenced, in the case of metabarcoding libraries this includes the barcode locus, as well as the forward and reverse PCR primers used to amplify that locus.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">the "insert" is the commonly used term for the target DNA that is to be sequenced, in the case of metabarcoding libraries this also includes the forward and reverse PCR primers used to amplify the target DNA.</span></p>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The "N"s in the above diagrams indicate the "indexes", or "barcodes" used to discriminate different samples. These are short 8-10bp sequences (i.e. CTATGTTA) that are unique to each sample. The index at the right hand side is the "i7 index", or "index1", while the index at the left hand side is the "i5 index", or "index2".</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The "N"s in the above diagrams indicate the "indexes", or "barcodes" used to discriminate different samples. These are short 8-10bp sequences (i.e. CTATGTTA) that are unique to each sample. The index at the right hand side is the "i7 index", or "index1", and the index at the left hand side is the "i5 index", or "index2".</span></p>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Dual indexed libraries can either be combinatiorial, where only 1 index is different between samples, while the other is shared:</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Most modern sequencing protocols use dual-indexing rather than single indexing. Dual indexed libraries can either be combinatiorial, where only 1 index is different between samples, while the other is shared:</span></p>
 <pre>
 <seq>
 Sample 1 - <i51>-AATAACGT</i51>...<i71>AATCGTTA</i71>
@@ -97,7 +97,7 @@ Sample 5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 </seq>
 </pre>
 
-<p><span style="font-family:verdana; font-size:1.1em;">Illumina encourages customers to use unique dual indexing (UDI) whenever possible to ensure the most accurate demultiplexing, and therefore reduce the risk of sample cross-contamination.</span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">Illumina now encourages customers to use unique dual indexing (UDI) whenever possible to ensure the most accurate demultiplexing, and therefore reduce the risk of sample cross-contamination.</span></p>
 
 <h1>Library preparation:</h1>
 
@@ -105,7 +105,7 @@ Sample 5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 
 <h3>First PCR:</h3>
 
-<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target DNA (COI) and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specific primers to include the Universal 5' adapters as tails. Below we are using the fwhF2-fwhR2n primer sets as an example: </span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The first PCR amplifies the target DNA  and adds the illumina Read 1 primer on the left side of the insert, and the Read 2 primer on right side of insert. To achieve this we need to modify our locus-specific primers to include the Universal 5' adapters as tails. In the below example we are using the fwhF2-fwhR2n primer sets which amplify a short region of the mitochondrial COI barcode: </span></p>
 
 <p><span style="font-family:verdana; font-size:1.1em;"></span></p>
 <pre>
@@ -126,10 +126,13 @@ Sample 5 - <i55>-GTTGACGC</i55>...<i75>CGAAGGAC</i75>
 </seq>
 </pre>
 
+<p><span style="font-family:verdana; font-size:1.1em;">Note that in some sequencing protocols such as those used for whole-genome, metagenomic, or metatranscriptomics, the Read 1 and Read 2 adapters are annealed to the molecules using alternatives to PCR such as tagmentation or ligation.</span></p>
+
+
 <br></br>
 
 <h3>Second PCR:</h3>
-<p><span style="font-family:verdana; font-size:1.1em;">The second PCR uses the Read 1 and Read 2 primer sequences as templates to add the P5 and P7 sequencing primers, as well as i5 and i7 indexes. The second set of primers, commonly referred to as indexing primers, are normally purchased in a kit or designed in house. Either way, they are generally structured like this: </span></p>
+<p><span style="font-family:verdana; font-size:1.1em;">The second PCR uses the Read 1 and Read 2 primer sequences as templates to add the P5 and P7 sequencing primers, as well as the i5 and i7 indexes. The second set of primers, commonly referred to as indexing primers, are normally purchased in a kit or designed in-house. Either way, they are generally structured as follows:</span></p>
 
 <pre>
 <seq>
