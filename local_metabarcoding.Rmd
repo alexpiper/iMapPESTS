@@ -90,10 +90,11 @@ You may wish to run this workflow through the BASC command line in order to take
 # Create new interactive SLURM session
 sinteractive --ntasks=1 --cpus-per-task=10 --mem-per-cpu=10GB --time=72:00:00
 
-module load R/4.0.0-foss-2020a
+module load R/4.1.0-foss-2021a
 module load pkgconfig/1.5.1-GCCcore-9.3.0-Python-3.8.2
-module load GDAL/3.0.2-foss-2019a-Python-3.7.2
+module load GDAL/3.3.0-foss-2021a
 module load BLAST+/2.11.0-gompi-2020a
+module load Pandoc/2.5
 
 # Load R
 R
@@ -556,8 +557,12 @@ for (i in 1:length(runs)){
     
     Fprimers <- unlist(str_split(unique(primer_data$for_primer_seq), ";"))
     Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
+    
+    # Subset fastqs to only those samples with target primers
+    fastqFs_primer <- fastqFs[sapply(fastqFs, function(x){any(str_detect(x, primer_data$sample_id))})]
+    fastqRs_primer <- fastqRs[sapply(fastqRs, function(x){any(str_detect(x, primer_data$sample_id))})]
 
-    trimmed[[i]] <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+    trimmed[[i]] <- purrr::map2_dfr(fastqFs_primer, fastqRs_primer, function(x,y){
         bbtrim2(install="bin/bbmap", fwd = x, rev = y,
               primers = c(Fprimers, Rprimers), checkpairs = FALSE,
               degenerate = TRUE, out.dir=file.path(path, "01_trimmed"), trim.end = "left", 
@@ -594,7 +599,7 @@ for (i in 1:length(runs)){
   
   # Print warning for each sample
   for(w in 1:nrow(trim_summary)){
-    if (trim_summary[w,]$perc_reads_remaining < 10) {message(paste0("WARNING: Less than 10% bases remaining for ",trim_summary[w,]$sample), "Check primers are correct")}
+    if (trim_summary[w,]$perc_reads_remaining < 10) {message(paste0("WARNING: Less than 10% bases remaining for ",trim_summary[w,]$sample), ", check primer sequences are correct")}
   }
 }
 
@@ -662,6 +667,10 @@ for (i in 1:length(runs)){
       demuxpath <- file.path(path, "00_demux")
       dir.create(demuxpath)
 
+      # Get list of fasta files
+      fastqFs <- sort(list.files(path, pattern="*R1_001.*", full.names = TRUE))
+      fastqRs <- sort(list.files(path, pattern="*R2_001.*", full.names = TRUE))
+        
       # If there is multiple primer combination per run, do each seperately
       primer_runs <- unique(run_data$pcr_primers)
       for (p in 1:length(primer_runs)){
@@ -671,10 +680,11 @@ for (i in 1:length(runs)){
         Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
         primer_names <- unlist(str_split(unique(primer_data$pcr_primers), ";"))
         
-        # Demultiplex reads
-        fastqFs <- sort(list.files(path, pattern="*R1_001.*", full.names = TRUE))
-        fastqRs <- sort(list.files(path, pattern="*R2_001.*", full.names = TRUE))
-        demux <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+        # Subset fastqs to only those samples with target primers
+        fastqFs_primer <- fastqFs[sapply(fastqFs, function(x){any(str_detect(x, primer_data$sample_id))})]
+        fastqRs_primer <- fastqRs[sapply(fastqRs, function(x){any(str_detect(x, primer_data$sample_id))})]
+        
+        demux <- purrr::map2_dfr(fastqFs_primer, fastqRs_primer, function(x,y){
           bbdemux2(install="bin/bbmap", fwd=x, rev=y, Fbarcodes = Fprimers, 
                       Rbarcodes = Rprimers, names=primer_names, degenerate=TRUE, out.dir=demuxpath,
                       threads=1 , mem=4,  hdist=0, force=TRUE)
@@ -682,6 +692,7 @@ for (i in 1:length(runs)){
         
         # Rename output files to match imappests format
         old_names <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE)) 
+        old_names <- old_names[sapply(old_names, function(x){any(str_detect(x, primer_data$sample_id))})]
         new_names <- old_names %>%
           basename() %>%
           str_remove(".fastq.gz") %>%
@@ -694,6 +705,8 @@ for (i in 1:length(runs)){
 
         # Trim primers from demultiplexed fastq
         demux_fastqs <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE))
+        demux_fastqs <- demux_fastqs[sapply(demux_fastqs, function(x){any(str_detect(x, primer_data$sample_id))})]
+
         trimmed[[i]] <- purrr::map_dfr(demux_fastqs, function(x){
           bbtrim2(install="bin/bbmap", fwd = x,
                 primers = c(Fprimers, Rprimers), checkpairs = FALSE,
@@ -724,8 +737,12 @@ for (i in 1:length(runs)){
         
         Fprimers <- unlist(str_split(unique(primer_data$for_primer_seq), ";"))
         Rprimers <- unlist(str_split(unique(primer_data$rev_primer_seq), ";"))
+        
+        # Subset fastqs to only those samples with target primers
+        fastqFs_primer <- fastqFs[sapply(fastqFs, function(x){any(str_detect(x, primer_data$sample_id))})]
+        fastqRs_primer <- fastqRs[sapply(fastqRs, function(x){any(str_detect(x, primer_data$sample_id))})]
 
-        trimmed[[i]] <- purrr::map2_dfr(fastqFs, fastqRs, function(x,y){
+        trimmed[[i]] <- purrr::map2_dfr(fastqFs_primer, fastqRs_primer, function(x,y){
             bbtrim2(install="bin/bbmap", fwd = x, rev = y,
                   primers = c(Fprimers, Rprimers), checkpairs = FALSE,
                   degenerate = TRUE, out.dir=file.path(path, "01_trimmed"), trim.end = "left", 
@@ -760,7 +777,7 @@ for (i in 1:length(runs)){
   
   # Print warning for each sample
   for(w in 1:nrow(trim_summary)){
-    if (trim_summary[w,]$perc_reads_remaining < 10) {message(paste0("WARNING: Less than 10% bases remaining for ",trim_summary[w,]$sample), "Check primers are correct")}
+    if (trim_summary[w,]$perc_reads_remaining < 10) {message(paste0("WARNING: Less than 10% bases remaining for ",trim_summary[w,]$sample), ", check primer sequences are correct")}
   }
 }
 
@@ -1325,7 +1342,7 @@ ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spe
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
-ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
+ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE, strand = "top") 
 saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids
@@ -1385,7 +1402,7 @@ ranks <-  c("Root", "Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spe
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
-ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE) 
+ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE, strand = "top") 
 saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids
@@ -1443,7 +1460,7 @@ ranks <-  c("Root","Kingdom", "Phylum","Class", "Order", "Family", "Genus","Spec
 #Classify using IDTAXA
 trainingSet <- readRDS("reference/idtaxa_bftrimmed.rds")
 dna <- DNAStringSet(getSequences(seqtab_final)) # Create a DNAStringSet from the ASVs
-ids <- IdTaxa(dna, trainingSet, processors=2, threshold = 60, verbose=TRUE) 
+ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE, strand = "top") 
 saveRDS(ids, "output/rds/idtaxa.rds")
 
 # Output plot of ids

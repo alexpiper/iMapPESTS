@@ -433,12 +433,78 @@ test2 <- test %>%
     postfilt_qualplots = purrr::pmap(dplyr::select(., sample_id),
     .f = ~plot_read_quals(sample_id = ..1,
                           input_dir = "data/JRJ9F/02_filtered/", truncLen=NULL, quiet = FALSE)
-    )) %>%
+    ))
+
+
+test2 %>%
   group_by(fcid) %>%
   nest() %>%
   mutate()
 
 # Next group by fcid and nest 
+
+
+test2 %>% 
+  mutate(variants = purrr::map(data, .f = ~run_dada2{}))
+
+
+x <- test2$data
+
+
+run_dada2 <- function(fcid, output_dir, qc_dir, quiet=FALSE){
+  
+  output_dir <- normalizePath(output_dir)
+  qc_dir <- normalizePath(qc_dir)
+  
+  # Create output directory if it doesnt exist
+  if(!dir.exists(output_dir)) {dir.create(output_dir)}
+
+  # Create qc_dir if it doesnt exist
+  if(!dir.exists(qc_dir)) {dir.create(qc_dir, recursive = TRUE)}
+  
+  # Find samples with that fcid
+  
+  
+  fastqFs <- fs::dir_ls(path = input_dir, glob = paste0("*",sample_id, "*_R1_*"))
+  fastqRs <- fs::dir_ls(path = input_dir, glob = paste0("*",sample_id, "*_R2_*"))
+  if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",sample_id," do not match."))
+  
+  #Check if there were more than 1 primer per sample
+  multi_primer <- any(stringr::str_detect(for_primer_seq, ";"), stringr::str_detect(rev_primer_seq, ";"))
+  
+  if (multi_primer) {
+    for_primer_seq <- unlist(stringr::str_split(for_primer_seq, ";"))
+    rev_primer_seq <- unlist(stringr::str_split(rev_primer_seq, ";"))
+    
+    primer_names <- unlist(stringr::str_split(pcr_primers, ";"))
+    
+    # Define outfiles
+    fwd_out <- purrr::map(primer_names, ~{
+      normalizePath(paste0(output_dir,"/", str_replace(basename(fastqFs), ".fastq", paste0("_",.x, ".fastq"))))
+    }) %>%
+      unlist()
+    rev_out <- purrr::map(primer_names, ~{
+      normalizePath(paste0(output_dir,"/", str_replace(basename(fastqRs), ".fastq", paste0("_",.x, ".fastq"))))
+    }) %>%
+      unlist()
+    
+  } else if (!multi_primer) {
+    fwd_out <- normalizePath(paste0(output_dir,"/", basename(fastqFs)))
+    rev_out <- normalizePath(paste0(output_dir,"/", basename(fastqRs)))
+  } 
+  
+  # Demultiplex reads and trim primers
+  res <- trim_primers(fwd = fastqFs,
+                     rev = fastqRs,
+                     fwd_out = fwd_out,
+                     rev_out = rev_out,
+                     for_primer_seq = for_primer_seq,
+                     rev_primer_seq = rev_primer_seq,
+                     n = n, qualityType = qualityType, check_paired = check_paired,
+                     compress =compress, quiet=quiet
+  )
+  return(res)
+}
 
 # Run infer variants on nested FC DF
 
