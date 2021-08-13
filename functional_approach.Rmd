@@ -444,10 +444,6 @@ test2 %>%
 # Next group by fcid and nest 
 
 
-test2 %>% 
-  mutate(variants = purrr::map(data, .f = ~run_dada2{}))
-
-
 x <- test2$data
 
 

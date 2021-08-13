@@ -621,7 +621,7 @@ write_csv(logdf, "output/logs/logdf.csv")
 
 ## Multiplexed primers
 
-This workflow is for multiple primer-pairs per library. These could either be targetting different gene regions, taxa, or be twin-tagged replicate primers.
+This workflow is for multiple primer-pairs per library. These could either be targeting different gene regions, taxa, or be twin-tagged replicate primers.
 
 For the multiplexed workflow to run, the pcr_primers, for_primer_seq and rev_primer_seq fields in the sample sheet must contain all primers separated by a semicolon ';' For example:
 
@@ -690,7 +690,7 @@ for (i in 1:length(runs)){
                       threads=1 , mem=4,  hdist=0, force=TRUE)
         })
         
-        # Rename output files to match imappests format
+        # Rename output files to match imappests format (FCID_sample_ext1_pcr1_CALngsF1-CALngsR1_S12_R1R2_001.fastq.gz)
         old_names <- sort(list.files(paste0(demuxpath), pattern="_R1R2_", full.names = TRUE)) 
         old_names <- old_names[sapply(old_names, function(x){any(str_detect(x, primer_data$sample_id))})]
         new_names <- old_names %>%
@@ -698,8 +698,8 @@ for (i in 1:length(runs)){
           str_remove(".fastq.gz") %>%
           str_split("_", n=Inf) %>%
           purrr::map_chr(function(x){
-            paste0(paste0(c(x[1:3], x[length(x)], x[4:(length(x)-1)]), collapse = "_"),".fastq.gz")
-          }) 
+            paste0(paste0( c(x[1:4], x[length(x)], x[5:(length(x)-1)]), collapse = "_"),".fastq.gz")
+                      }) 
         file.remove(file.path(dirname(old_names), new_names))
         file.rename(old_names, file.path(dirname(old_names), new_names))
 
@@ -790,13 +790,14 @@ samdf <- samdf %>%
  group_split() %>%
  purrr::map(function(x){
    if(any(str_detect(x$pcr_primers, ";"))){
-   x %>% 
-     mutate(count = length(primer_names)) %>% #Replicate the samples
-     uncount(count) %>%
-     mutate(pcr_primers = unlist(str_split(unique(x$pcr_primers), ";")),
-            for_primer_seq = unlist(str_split(unique(x$for_primer_seq), ";")),
-            rev_primer_seq = unlist(str_split(unique(x$rev_primer_seq), ";")),
-            sample_id = paste0(sample_id, "_",pcr_primers)
+     primer_names <- unlist(str_split(unique(x$pcr_primers), ";")) 
+     x %>% 
+       mutate(count = length(primer_names)) %>% #Replicate the samples
+       uncount(count) %>%
+       mutate(pcr_primers = unlist(str_split(unique(x$pcr_primers), ";")),
+              for_primer_seq = unlist(str_split(unique(x$for_primer_seq), ";")),
+              rev_primer_seq = unlist(str_split(unique(x$rev_primer_seq), ";")),
+              sample_id = paste0(sample_id, "_",pcr_primers)
             ) 
    } else (x)
  }) %>%
@@ -931,8 +932,8 @@ for (i in 1:length(runs)){
   filtpath <- paste0("data/", runs[i], "/02_filtered" ) # Filtered forward files go into the path/filtered/ subdirectory
   dir.create(filtpath)
   
-  fastqFs <- sort(list.files(path, pattern="R1_001.*"))
-  fastqRs <- sort(list.files(path, pattern="R2_001.*"))
+  fastqFs <- sort(list.files(path, pattern="_R1_001.*"))
+  fastqRs <- sort(list.files(path, pattern="_R2_001.*"))
   
   if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",runs[i]," do not match."))
   
