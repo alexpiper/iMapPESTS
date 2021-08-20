@@ -1765,51 +1765,62 @@ speedyseq::psmelt(ps1) %>%
 
 # Optional - Check presence of taxa in Australia
 
-This is an optional step to run an automated search against the Australian Faunal Directory and the Atlas of Living Australia to see if the the detected species have been recorded in Australia before.
+This is an optional step to run an automated search against the Australian Faunal Directory ato see if the the detected species have been recorded in Australia before.
 
 Press the CODE button to the lower right to display the code for this optional step.
-
 
 ```{r distribution check, class.source = 'fold-hide'}
 ps1 <- readRDS("output/rds/ps_filtered.rds")
 
+# Check presence on AFD
+afd_check <- ps1 %>%
+  speedyseq::psmelt() %>%
+  dplyr::group_by(Family, Genus, Species) %>%
+  summarise(metabarcoding_reads = sum(Abundance)) %>%
+  filter(!str_detect(Species, "__")) %>%
+  mutate(Species = Species %>% str_replace_all("_", " ")) %>%
+  mutate(
+    Family_present = afdscraper::check_afd_presence(Family),
+    Genus_present = afdscraper::check_afd_presence(Genus),
+    Species_present = afdscraper::check_afd_presence(Species)
+  ) %>%
+  dplyr::select(Family, Family_present, Genus, Genus_present, 
+                Species, Species_present, metabarcoding_reads)
+    
+write_csv(afd_check, "output/results/final/afd_check.csv")
+
+# Check presence on ALA
 # First we need to set some data quality filters for ALA
 # To view available filters, run: find_field_values("basis_of_record")
-ala_quality_filter <- select_filters(
+ala_quality_filter <- galah::select_filters(
       basisOfRecord = c("PreservedSpecimen", "LivingSpecimen",
                       "MaterialSample", "NomenclaturalChecklist"),
       profile = "ALA")
 
-afd_ala_check <- ps1 %>%
+ala_check <- ps1 %>%
   speedyseq::psmelt() %>%
-  group_by(Species)%>%
+  dplyr::group_by(Family, Genus, Species) %>%
   summarise(metabarcoding_reads = sum(Abundance)) %>%
   filter(!str_detect(Species, "__")) %>%
   mutate(Species = Species %>% str_replace_all("_", " ")) %>%
-  mutate(AFD_present = purrr::map(Species, function(x){
-    !is.null(check_afd_name(x))
-    }),
-    AFD_distribution = purrr::map(Species, function(x){
-    paste(sort(get_afd_occurance(x)), collapse=", ")
-    }),
-    ALA_present = purrr::map(Species, function(x){
+  mutate(
+    species_present = purrr::map(Species, function(x){
     # first check name
     query <- select_taxa(x) %>% 
-      filter(across(any_of("match_type"), ~!.x == "higherMatch"))
+      as_tibble()%>%
+      dplyr::filter(across(any_of("match_type"), ~!.x == "higherMatch"))
     # Then get occurance counts
     if(!is.null(query$scientific_name)){
       ala_occur <- ala_counts(taxa=query, filters=ala_quality_filter)
-      return(data.frame(ALA_present = ifelse(ala_occur > 0, TRUE, FALSE), ALA_counts = ala_occur))
+      return(data.frame(Species_present = ifelse(ala_occur > 0, TRUE, FALSE), ALA_counts = ala_occur))
     } else {
-      return(data.frame(ALA_present = FALSE, ALA_counts = 0))
+      return(data.frame(Species_present = FALSE, ALA_counts = 0))
     }
     })) %>%
-  unnest(AFD_present, AFD_distribution) %>%
-  mutate(AFD_distribution = na_if(AFD_distribution, "")) %>%
-  unnest_wider(ALA_present)
+  unnest(species_present) %>%
+  dplyr::select(Family, Genus, Species, Species_present, ALA_counts, metabarcoding_reads)
 
-write_csv(afd_ala_check, "output/results/final/afd_ala_check.csv")
-
+write_csv(ala_check, "output/results/final/ala_check.csv")
 ```
 
 # Output fate of reads through pipeline
