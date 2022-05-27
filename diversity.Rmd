@@ -60,16 +60,31 @@ sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 devtools::install_github("alexpiper/taxreturn")
 devtools::install_github("alexpiper/seqateurs")
 devtools::install_github("mikemc/speedyseq")
+devtools::install_github("adw96/breakaway")
+devtools::install_github("adw96/DivNet")
+
+
 
 library(speedyseq)
 library(taxreturn)
 library(seqateurs)
+library(breakaway)
+library(DivNet)
 ```
 
 # Read in phyloseq object
 
+For this example we will use the filtered phyloseq object from Piper, A. M., Cunningham, J. P., Cogan, N., & Blacket, M. J. (2022). DNA Metabarcoding Enables High-Throughput Detection of Spotted Wing Drosophila (Drosophila suzukii) Within Unsorted Trap Catches. Frontiers in Ecology and Evolution, 10.
+
 ```{r phyloseq}
-ps <- readRDS("output/rds/ps.rds")
+# Download the RDS file
+githubURL <- ("https://github.com/alexpiper/Drosophila_metabarcoding/raw/master/output/rds/ps_filtered.rds")
+download.file(githubURL,"ps_filtered.rds")
+
+ps <- readRDS("ps_filtered.rds") %>%
+  subset_samples(pcr_primers =="fwhF2-fwhR2n") %>% #Subset to just these primers
+  subset_samples(type %in% c("DC", "FF", "SPD")) %>% # Subset to just field samples
+  filter_taxa( function(x) mean(x) > 0, TRUE) # Drop any missing taxa
 ```
 
 # Optional - Exclude taxa that could not be clasified to Genus
@@ -92,8 +107,34 @@ message((ntaxa(ps) - ntaxa(ps_filtered)), " Taxa dropped")
 ps <- ps_filtered
 ```
 
+# Agglomerate taxa
 
-# Alpha diversity (Unrarefied)
+An important aspect that should be considered when comparing diversity between samples is what taxonomic rank you are considering that diversity at. You may want to compare at the ASV/Haplotype level, or at the species level or above.
+
+Here we wish to only compare differences in species diversity, 
+
+```{R agglomerate}
+ps <- ps %>%
+  tax_glom(taxrank = "Species")
+
+```
+
+
+## Comparisons of observed diversity
+
+In ecology, alpha diversity (α-diversity) is the mean species diversity in a site at a local scale. There is a range of diversity indices that can be used to quantify alpha diversity, and here we will focus on five useful metrics:
+
+* Richness: Simply quantifies how many different types (species, ASV's, etc) the sample contains.
+* Shannon index: This metric takes into account the number of species present, as well as the relative abundance of each species. As species richness and evenness increase, so diversity increases.
+* Simpson index: Simpson index also takes into account the number of species present, as well as the relative abundance of each species, but uses a different formula. Shannon's Index is generally more sensitive to species richness while Simpson's Index is more sensitive to species evenness
+* Chao1 index: This is a nonparametric method for estimating the number of species in a community, including unobserved species. The Chao richness estimator is based on the concept that rare species infer the most information about the number of missing species, and uses the presence of singletons and doubletons to estimate the number of missing species.
+* Phylogenetic diversity: This is a measure of diversity based on phylogeny. The phylogenetic diversity of a set of species is equal to the sum of the branch lengths separating all the members of the community.
+
+See references: Kim, B. R., Shin, J., Guevarra, R. B., Lee, J. H., Kim, D. W., Seol, K. H., ... & Isaacson, R. E. (2017). Deciphering diversity indices for a better understanding of microbial communities. Journal of Microbiology and Biotechnology, 27(12), 2089-2093.
+
+No matter the metric used, a major issue with comparing alpha diversities between samples is differences in sampling effort (sequencing depths) between samples. As the number of detected taxa is correlated with the sampling effort, this means that samples with higher sequencing depths will generally appear more diverse, which can confound comparisons. Note that this is a much bigger problem with microbial communities where it is difficult to exhaustively sequence the community due to the enormous numbers of different microbes, ranging from highly abundant taxa to rare taxa that are often unobserved. For many simple communities such as the contents of insect traps, it may be that you have captured all the taxa at the current sequencing depth and just comparing observed diversity is sufficient.
+
+In this first section we will just compare the observed diversities. In the sections below we will demonstrate 2 alternative approaches for accounting for differences in sequencing efforts.
 
 ```{r alpha div}
 dir.create("output/alpha")
@@ -123,27 +164,27 @@ div_table <- sespd %>%
             by = "sample_id") 
 
 
-# Summarise mean diversity
+# Summarise mean diversity by trap type
 div_table %>%
+  group_by(type) %>%
   summarise(across(c("alpha", "pd", "Chao1", "se.chao1", "Shannon", "Simpson"), mean, na.rm=TRUE))
 
-# Difference in alpha diversity between a factor
-# In this case we are going to use sample_name as that factor
-report::report(aov(alpha ~sample_name, data=div_table))
-broom::tidy(TukeyHSD(aov(alpha ~sample_name, data=div_table)))
+# Difference in alpha diversity between a trap types
+report::report(aov(alpha ~type, data=div_table))
+broom::tidy(TukeyHSD(aov(alpha ~type, data=div_table)))
 
-report::report(aov(Shannon ~sample_name, data=div_table))
-broom::tidy(TukeyHSD(aov(Shannon ~sample_name, data=div_table)))
+report::report(aov(Shannon ~type, data=div_table))
+broom::tidy(TukeyHSD(aov(Shannon ~type, data=div_table)))
 
-report::report(aov(pd ~sample_name, data=div_table))
-broom::tidy(TukeyHSD(aov(pd ~sample_name, data=div_table)))
+report::report(aov(pd ~type, data=div_table))
+broom::tidy(TukeyHSD(aov(pd ~type, data=div_table)))
 
 # plot differences in alpha diversity
 gg.alpha <- div_table %>% 
   pivot_longer(c("alpha", "pd", "Chao1", "se.chao1", "Shannon", "Simpson"),
                names_to="metric",
                values_to="value") %>%
-  ggplot(aes(x=fcid, y=value, colour=fcid)) +
+  ggplot(aes(x=type, y=value, colour=type)) +
   geom_jitter(size=2, alpha=0.6, width=0.2, height=0)+
   geom_boxplot(fill=NA)+
   #coord_flip()+
@@ -154,16 +195,24 @@ gg.alpha
 
 # Write out results as a CSV
 alpha_results <- bind_rows(
-  broom::tidy(TukeyHSD(aov(alpha ~sample_name, data=div_table))) %>% mutate(metric = "richness"),
-  broom::tidy(TukeyHSD(aov(Shannon ~sample_name, data=div_table))) %>% mutate(metric = "shannon"),
-  broom::tidy(TukeyHSD(aov(pd ~sample_name, data=div_table))) %>% mutate(metric = "phylogenetic")
+  broom::tidy(TukeyHSD(aov(alpha ~type, data=div_table))) %>% mutate(metric = "richness"),
+  broom::tidy(TukeyHSD(aov(Shannon ~type, data=div_table))) %>% mutate(metric = "shannon"),
+  broom::tidy(TukeyHSD(aov(pd ~type, data=div_table))) %>% mutate(metric = "phylogenetic")
 )
 
 write_csv(alpha_results, "output/alpha/alpha_anova.csv")
 ```
 
 
-# Alpha diversity (Rarefied)
+## Rarefied comparisons
+
+A common option from the ecological literature to take into account differences in sampling effort between samples (in this case differences in the number of sequencing reads) is a process caled Rarefaction where data points (sequencing reads) are randomly discarded from higher-effort samples until they have the same sampling effort as the lowest samples. Note however that rarefaction can introduce bias due to the way randomly discarding reads can affect communities with different abundance structures differently, and also wastes data that you have spent money and effort to collect.
+
+See references:
+* McMurdie, P. J., & Holmes, S. (2014). Waste not, want not: why rarefying microbiome data is inadmissible. PLoS computational biology, 10(4), e1003531.
+* Willis, A. D. (2019). Rarefaction, alpha diversity, and statistics. Frontiers in microbiology, 10, 2407.
+
+Due to these issues of bias, Rarefaction option is not recommended unless you have a good justification for doing this.
 
 ```{r alpha div rarefied}
 dir.create("output/alpha_rarefied")
@@ -188,23 +237,21 @@ sample_sums(ps) %>%
 # Choose a depth to rarefy to (everything under this will be discarded)
 raredepth <- 100000
 
-
 # Plot a rarefaction curve to see which samples would be lost at this depth
 rare <- otu_table(ps) %>%
   as("matrix") %>%
   rarecurve(step=10000) %>% # Change this to be higher if you have heaps of reads to make it faster
+  purrr::set_names(sample_names(ps)) %>%
   purrr::map_dfr(., function(x){
   b <- as.data.frame(x)
   b <- data.frame(OTU = b[,1], count = rownames(b))
   b$count <- as.numeric(gsub("N", "",  b$count))
-  nm <- names(attr(x, "Subsample"))
-  b$sample_id <- nm[!nm==""]
   return(b)
-  })%>%
+  },.id="sample_id") %>%
   left_join(sample_data(ps)%>%
     as("matrix") %>%
     as_tibble() %>%
-      dplyr::select(sample_id, fcid) %>%
+      dplyr::select(sample_id, type, fcid) %>%
       distinct())
 
 gg.rare <- rare %>%
@@ -248,27 +295,27 @@ div_table_rare <- sespd_rare %>%
             by = "sample_id") 
 
 
-# Summarise mean diversity
+# Summarise mean diversity between trap types
 div_table_rare %>%
+  group_by(type) %>%
   summarise(across(c("alpha", "pd", "Chao1", "se.chao1", "Shannon", "Simpson"), mean, na.rm=TRUE))
 
-# Difference in alpha diversity between a factor
-# In this case we are going to use sample_name as that factor
-report::report(aov(alpha ~sample_name, data=div_table_rare))
-broom::tidy(TukeyHSD(aov(alpha ~sample_name, data=div_table_rare)))
+# Difference in alpha diversity between trap types
+report::report(aov(alpha ~type, data=div_table_rare))
+broom::tidy(TukeyHSD(aov(alpha ~type, data=div_table_rare)))
 
-report::report(aov(Shannon ~sample_name, data=div_table_rare))
-broom::tidy(TukeyHSD(aov(Shannon ~sample_name, data=div_table_rare)))
+report::report(aov(Shannon ~type, data=div_table_rare))
+broom::tidy(TukeyHSD(aov(Shannon ~type, data=div_table_rare)))
 
-report::report(aov(pd ~sample_name, data=div_table_rare))
-broom::tidy(TukeyHSD(aov(pd ~sample_name, data=div_table_rare)))
+report::report(aov(pd ~type, data=div_table_rare))
+broom::tidy(TukeyHSD(aov(pd ~type, data=div_table_rare)))
 
 # plot differences in alpha diversity
 gg.alpha_rare <- div_table_rare %>% 
   pivot_longer(c("alpha", "pd", "Chao1", "se.chao1", "Shannon", "Simpson"),
                names_to="metric",
                values_to="value") %>%
-  ggplot(aes(x=fcid, y=value, colour=fcid)) +
+  ggplot(aes(x=type, y=value, colour=type)) +
   geom_jitter(size=2, alpha=0.6, width=0.2, height=0)+
   geom_boxplot(fill=NA)+
   #coord_flip()+
@@ -279,17 +326,107 @@ gg.alpha
 
 # Write out results as a CSV
 alpha_results_rare <- bind_rows(
-  broom::tidy(TukeyHSD(aov(alpha ~sample_name, data=div_table_rare))) %>% mutate(metric = "richness"),
-  broom::tidy(TukeyHSD(aov(Shannon ~sample_name, data=div_table_rare))) %>% mutate(metric = "shannon"),
-  broom::tidy(TukeyHSD(aov(pd ~sample_name, data=div_table_rare))) %>% mutate(metric = "phylogenetic")
+  broom::tidy(TukeyHSD(aov(alpha ~type, data=div_table_rare))) %>% mutate(metric = "richness"),
+  broom::tidy(TukeyHSD(aov(Shannon ~type, data=div_table_rare))) %>% mutate(metric = "shannon"),
+  broom::tidy(TukeyHSD(aov(pd ~type, data=div_table_rare))) %>% mutate(metric = "phylogenetic")
 )
 
 write_csv(alpha_results, "output/alpha_rarefied/alpha_anova.csv")
 ```
 
+## Breakaway
+
+As an alternative to the Rarefaction approach of discarding sequencing reads until the sampling effort matches between samples, Breakaway offers an alternative framework that involves estimating of the number of unobserved species, then using this estimate to adjust the sample richness of each community before comparisons are made. Breakaway uses the abundance structure of the observed data to predict how many species were missing. Essentially, if there are only a few species in the sample that were observed rarely, that suggests that you probably observed most of the diversity in the community, while if there were many species in the sample that were observed infrequently (such as once or twice), this suggests that there were many species that were observed zero times. Breakaway also can account for variance in estimates of unobserved species when comparing diversities between samples, making it a more robust approach than alternative approaches such as Chao1.
+
+See references:
+* Willis, A., & Bunge, J. (2015). Estimating diversity via frequency ratios. Biometrics, 71(4), 1042-1049.
+* Willis, A., Bunge, J., & Whitman, T. (2017). Improved detection of changes in species richness in high diversity microbial communities. Journal of the Royal Statistical Society: Series C (Applied Statistics), 66(5), 963-977.
+* Willis & Martin. (2018+). DivNet: Estimating diversity in networked communities. bioRxiv. 10.1101/305045.
+
+Note that if the estimated number of unobserved species is zero, it is appropriate to just compare the original observed alpha diversity. Thus the breakaway approach can just be used as a check to see if you have captured all the species in the community at the current sequencing depths.
+
+
+```{r breakaway}
+richness_break <- otu_table(ps) %>% 
+  as.data.frame()%>%
+  t() %>%
+  breakaway() 
+
+# Plot the breakaway estimates and standard errors
+plot(richness_break, physeq=ps, shape="type")
+
+# Get a tibble of the richness estimates and their uncertainty
+breakaway_estimates <- richness_break %>%
+  summary() %>%
+  as_tibble()
+
+# Get metadata
+meta <- ps %>%
+  sample_data %>%
+  as_tibble %>%
+  mutate("sample_names" = ps %>% sample_names )
+
+combined_richness <- meta %>%
+  left_join(summary(richness_break),
+            by = "sample_names")
+
+
+# Fit fixed effect model 
+fixed_effect_richness <- betta(formula = estimate ~ type, 
+                      ses = error, data = combined_richness)
+fixed_effect_richness$table
+
+# Or fit random effect model with sample_name as random effect
+random_effect_richness  <- betta_random(formula = estimate ~ type | sample_name, 
+               ses = error,  data = combined_richness)
+
+random_effect_richness$table
+
+
+# Alternatively if you want Shannon or Simpson index you can use the DivNet package
+richness_dv <- DivNet::divnet(ps, X = NULL)
+
+combined_shannon <- meta %>%
+  left_join(richness_dv$shannon %>% summary,
+            by = "sample_names")
+combined_shannon
+
+# Fit fixed effect model
+fixed_effect_shannon <- betta(formula = estimate ~ type, 
+                      ses = error, data = combined_shannon)
+fixed_effect_shannon$table
+
+# Or fit random effect model with sample_name as random effect
+random_effect_shannon <- betta_random(formula = estimate ~ type | sample_name, 
+               ses = error,  data = combined_shannon)
+
+random_effect_shannon$table
+```
+
 # Beta diversity
 
-First calculate the following beta diversity between samples
+In ecology, beta diversity (β-diversity or true beta diversity) is the ratio between regional and local species diversity. 
+
+The first analysis of beta diversity will involve creating dissimilarity matrices between samples, using a certain distance metric, then visualising these on a PCoA plot and also seeing if there are statistically significant differences driven by a specific covariate.
+
+## Transformations
+
+Before calculating beta diversity, you may want to transform the dataset into proportions or normalise the data some other way
+
+```{r transformations}
+# Transform to proportions
+count_to_prop <- function(x) {return( x / sum(x) )}
+ps_prop <- transform_sample_counts(ps, count_to_prop)
+
+# If you want to use proportions, call ps_prop instead of ps in later functions
+
+```
+
+## Distance metrics
+
+There are a range of different distance metrics that can be used to quantify the compositional differences between communities and samples. These generally differ by whether they are presence-absence or take into account abundance, and whether they take into account phylogenetic divergence between community members when calculating dissimilarity, or if they consider any different species as equaly different. 
+
+The common distance metrics we will calculate here are:
 
 * Jaccard - A presence absense metric
 * Bray-curtis - A abundance weighted metric
@@ -298,19 +435,8 @@ First calculate the following beta diversity between samples
 * Unifrac - A phylogenetic presence / absence metric
 * Weighted Unifrac - A abundance and phylogenetic weighted metric
 
+
 ```{r Beta distances}
-
-# Read in francescos
-ps <- readRDS("ps.rds")
-
-# Make sure all samples and taxa without any reads are removed
-ps_filtered <- prune_samples(sample_sums(ps) > 0, ps)
-ps_filtered <- ps_filtered %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) 
-
-# set ps to the filtered one
-ps <- ps_filtered
-
 # Get OTU tables
 otutab <- otu_table(ps) %>%
   as("matrix")
@@ -342,21 +468,47 @@ distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps, weighted=TRUE, parallel = T
 distlist <- distlist[!sapply(distlist, is.null)]
 ```
 
-# Adonis and betadisper
 
-Now we will conduct PERMANOVA (adonis), and PERMDISP tests
+## PCoA plots
+
+Principal coordinates analysis (PCoA), also known as classical Multidimensional scaling (MDS) is a popular approach for graphically representing relationships between objects (e.g. plots or samples) in multidimensional space. This uses the dissimilarity matrix calculated above, and represents them graphically in two dimensions such that the distance between points on the plot approximates their multivariate dissimilarity with the full dataset as closely as possible. Here we will use PCoA to see how well different distance measures capture the underlying differences in the dataset.
+
+```{r pca plots}
+pcoa_plots <- distlist %>%
+  purrr::map2(names(distlist), function(x,y){
+    plot.dist <- as.dist(x)
+    plot.pcoa <- ordinate(ps, 'PCoA', distance=plot.dist)
+    gg.pca <- plot_ordination(ps, plot.pcoa, color = "type") +
+      geom_point(size=3, alpha=0.8) +
+      geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
+      geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
+      #coord_fixed() +
+      theme(legend.position = "right") +
+      labs(title=y)
+    gg.pca
+    
+  })
+
+wrap_plots(pcoa_plots)
+```
+
+## Comparing beta diversity
+
+Now we will conduct permutational multivariate analysis of variance tests using the adonis2 function from the vegan R package
+
+Anderson (2001) warns that this method may confound location and dispersion effects: significant differences may be caused by different within-group variation (dispersion) instead of different mean values of the groups (location). Therefore we will use the sister function betadisper to study the differences in dispersion within the same geometric framework.
+
 
 ```{r betatest}
 # Adonis test
 metadata <- sample_data(ps) %>%
   as("data.frame")
 
-# Test difference in beta diversity ny sample (Change this to whatever factor your interested in)
+# Test difference in beta diversity by trap type (Change this to whatever factor your interested in)
 adonis_results <- distlist %>%
   purrr::map(function(x) {
-    bind_rows(
-    broom::tidy(adonis(x~extraction_method + fcid, method="euclidean", data=metadata)$aov.tab) 
-    )
+    y <- as.dist(x[metadata$sample_id, metadata$sample_id])
+    broom::tidy(adonis2(y~type, method="euclidean", data=metadata, permutations = 999)) 
 })  %>%
   bind_rows(.id="dist")
 
@@ -364,11 +516,8 @@ adonis_results <- distlist %>%
 betadisper_results <- distlist %>%
   purrr::map(function(x) {
     y <- as.dist(x[metadata$sample_id, metadata$sample_id])
-  bind_rows(
-    as.data.frame(permutest(vegan::betadisper(y, metadata$sample_name))$tab) %>%
-      #dplyr::slice(1) %>% 
-      mutate(term="sample_name")
-  )
+    as.data.frame(permutest(vegan::betadisper(y, metadata$type))$tab)
+    
 })  %>%
   bind_rows(.id="dist")
 
@@ -377,33 +526,63 @@ write_csv(adonis_results, "output/beta/adonis.csv")
 write_csv(betadisper_results, "output/beta/adonis.csv")
 ```
 
-# PCA plots
 
-Finally we can plot a PCA plot of how things cluster with a different beta diversity metric
+## Multivariate GLM
 
-```{r pca plots}
-# Get desired distance to make the plot (here i am using Unifrac)
-plot.dist <- as.dist(distlist$WUnifrac)
+The above analyses of beta-diversity are “distance-based analyses”. This means the first step of the analysis is to calculate a measure of similarity between each pair of samples, thus converting a multivariate dataset into a univariate one. There are a couple of problems with these kinds of analysis. First, their statistical power is very low, except for variables with high variance. This means that for variables which are less variable, the analyses are less likely to detect a treatment effect. Second, they do not account for a very important property of multivariate data, which is the mean-variance relationship. Typically, in multivariate datasets like species-abundance data sets, counts for rare species will have many zeros with little variance, and the higher counts for more abundant species will be more variable.
 
-#Philr PCOA
-plot.pcoa <- ordinate(ps, 'PCoA', distance=plot.dist)
+The mvabund approach improves power across a range of species with different variances and includes an assumption of a mean-variance relationship. It does this by fitting a single generalised linear model (GLM) to each response variable with a common set of predictor variables. We can then use resampling to test for significant community level or species level responses to our predictors.
 
-gg.pca <- plot_ordination(ps, plot.pcoa, color = "extraction_method") +
-  geom_point(size=3, alpha=0.8) +
-  geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
-  geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
-  #coord_fixed() +
-  labs(colour = "fcid") +
-  theme(legend.position = "right") 
-
-gg.pca
-```
+Another main advantage of this approach is that it can tell you what taxa are driving the differences between samples
 
 
-```{details, echo = FALSE, details.summary = 'Reproducability receipt'}
-# datetime
-Sys.time()
-#repository
-git2r::repository()
-sessioninfo::session_info()
+```{r manyglm}
+library(mvabund)
+
+# Get species occurance table
+otutab <- otu_table(ps) %>%
+  as.matrix() %>%
+  as.data.frame()
+
+# Get metadata 
+metadata <- sample_data(ps) %>%
+  as("data.frame")%>%
+  mutate(orchard_type = paste0(orchard, "_", type)) %>%
+  dplyr::select(sample_id, orchard, type, orchard_type)
+
+spp_occur <- mvabund(otutab)
+
+# Look at the spread of the data
+boxplot(spp_occur)
+
+# Look at te mean variance relationship
+meanvar.plot(spp_occur)
+
+
+# Model 1 - trap type
+mod1 <- manyglm(spp_occur ~ metadata$type, family="negative.binomial")
+
+# Generaate a plot of the residuals - should see random scatter of points
+plot(mod1)
+
+# Run a multivariate anova on the results to test the multivariate hypothesis of whether species composition varied  between trap types (Can take a while)
+anova_res <- anova(mod1)
+
+# Run a univariate anova to find which species are more likely to be found in which traps (Can take a while)
+univa_res <- anova(mod1, p.uni="adjusted")
+
+# Look at the significant species driving the differences
+univa_tests <- as_tibble(univa_res[["uni.test"]], rownames ="term" ) %>%
+  pivot_longer(-term,
+               names_to = "species",
+               values_to="test") %>%
+  left_join(
+    as_tibble(univa_res[["uni.p"]], rownames ="term" ) %>%
+      pivot_longer(-term,
+                   names_to = "species",
+                   values_to="pval") 
+  ) %>%
+  dplyr::filter(!term == "(Intercept)") %>%
+  mutate(signif = pval < 0.05)
+
 ```
