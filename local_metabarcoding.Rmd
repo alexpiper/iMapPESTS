@@ -1008,6 +1008,7 @@ filtered_out <- vector("list", length=length(runs))
 maxEE <- 1 #Filter reads above Expected errors (EE = sum(10^(-Q/10))). Set higher for poor quality sequences.
 rm.lowcomplex <- 0 # Remove low-complexity, set higher for NovaSeq and other 2 colour platforms
 minlength <- 50
+maxlength <- 225
 
 for (i in 1:length(runs)){
   
@@ -1026,8 +1027,9 @@ for (i in 1:length(runs)){
   
   filtered_out[[i]] <- filterAndTrim(fwd = file.path(path, fastqFs), filt = file.path(filtpath, fastqFs),
                                       rev = file.path(path, fastqRs), filt.rev = file.path(filtpath, fastqRs),
-                                      maxEE = maxEE, truncLen = 0, minLen = minlength, rm.lowcomplex = rm.lowcomplex,
-                                      rm.phix = TRUE, matchIDs = TRUE, id.sep = "\\s",
+                                      maxEE = maxEE, truncLen = 0, minLen = minlength, maxLen = maxlength ,
+                                      rm.lowcomplex = rm.lowcomplex, rm.phix = TRUE, 
+                                      matchIDs = TRUE, id.sep = "\\s",
                                       multithread = TRUE, compress = TRUE, verbose = TRUE)
 
   # post filtering plot
@@ -1795,6 +1797,9 @@ write_csv(afd_check, "output/results/final/afd_check.csv")
 ala_quality_filter <- galah::select_filters(
       basisOfRecord = c("PreservedSpecimen", "LivingSpecimen",
                       "MaterialSample", "NomenclaturalChecklist"),
+      profile = "ALA")
+
+ala_quality_filter <- galah::select_filters(
       profile = "ALA")
 
 ala_check <- ps1 %>%
