@@ -119,6 +119,90 @@ ps <- ps %>%
 
 ```
 
+# Accumulation of species with additional sequencing reads
+
+```{r rarecurve}
+rare <- otu_table(ps) %>%
+  as("matrix") %>%
+  rarecurve(step=10000) %>% # Change this to be higher if you have heaps of reads to make it faster
+  purrr::set_names(sample_names(ps)) %>%
+  purrr::map_dfr(., function(x){
+    b <- as.data.frame(x)
+    b <- data.frame(OTU = b[,1], count = rownames(b))
+    b$count <- as.numeric(gsub("N", "",  b$count))
+    return(b)
+  },.id="sample_id") %>%
+  left_join(sample_data(ps)%>%
+              as("matrix") %>%
+              as_tibble() %>%
+              dplyr::select(sample_id, type, fcid) %>%
+              distinct())
+
+gg.rare <- rare %>%
+  ggplot() +
+  geom_line(aes(x = count, y = OTU, group=sample_id), alpha=0.5)+
+  geom_point(data = rare %>% 
+               group_by(sample_id) %>% 
+               top_n(1, count),
+             aes(x = count, y = OTU, colour=type)) +
+  scale_x_continuous(labels =  scales::label_number_si()) +
+  facet_wrap(fcid~., scales="free", ncol=1)+
+  theme(legend.position = "bottom")+
+  labs(x = "Sequence reads",
+       y = "Observed Species") 
+
+gg.rare
+
+```
+
+# Accumulation of species with additional samples 
+
+```{r spp accum}
+# Convert the species level phyloseq object to binary (presence/absence only)
+ps_binary <- ps
+ps_binary@otu_table[ps_binary@otu_table >= 1] <- 1
+ps_binary@otu_table[ps_binary@otu_table < 1] <- 0
+
+
+otutab <- otu_table(ps_binary) %>%
+  as("matrix") 
+
+# Factors to create plots for (i.e. trap type)
+plot_factor <- unique(sample_data(ps)$type)
+
+# Create a spp accumulation curve for each type - SD is calculated by taking random samples
+spp_accum <- list()
+for (i in 1:length(plot_factor)) {
+  samples_in_level <- sample_data(ps) %>% 
+    as.matrix %>% 
+    as.data.frame() %>% 
+    filter(type == plot_factor[i]) %>%
+    pull(sample_id)
+  temp_otutab <- otutab[rownames(otutab) %in% samples_in_level,]
+  accu <- vegan::specaccum(temp_otutab, method="random",permutations = 1000)
+  spp_accum[[i]] <- tibble(
+    samples = accu$sites,
+    richness = accu$richness,
+    sd = accu$sd,
+    type = plot_factor[i]
+  )
+}
+
+gg.spp_accum <- spp_accum %>%
+  bind_rows() %>%
+  ggplot(aes(x = samples, y = richness, group=type, colour=type)) +
+  geom_line(alpha=0.5, position = position_dodge(width=0.1))+
+  geom_point(position = position_dodge(width=0.1)) +
+  geom_linerange(aes(ymin=richness-sd, ymax=richness+sd), position = position_dodge(width=0.1)) +
+  scale_x_continuous(breaks =  scales::pretty_breaks()) +
+  theme(legend.position = "bottom")+
+  labs(x = "Samples",
+       y = "Observed Species") 
+
+gg.spp_accum
+
+```
+
 
 ## Comparisons of observed diversity
 
