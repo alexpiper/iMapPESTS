@@ -119,7 +119,7 @@ ps <- ps %>%
 
 ```
 
-# Accumulation of species with additional sequencing reads
+# Accumulation of species by sequencing reads
 
 ```{r rarecurve}
 rare <- otu_table(ps) %>%
@@ -155,7 +155,7 @@ gg.rare
 
 ```
 
-# Accumulation of species with additional samples 
+# Accumulation of species by samples 
 
 ```{r spp accum}
 # Convert the species level phyloseq object to binary (presence/absence only)
